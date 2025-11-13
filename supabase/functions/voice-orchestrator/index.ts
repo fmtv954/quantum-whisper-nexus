@@ -7,12 +7,13 @@ const corsHeaders = {
 };
 
 interface VoiceMessage {
-  type: 'start_call' | 'user_audio' | 'user_text' | 'end_call';
+  type: 'start_call' | 'audio_chunk' | 'user_audio' | 'user_text' | 'end_call';
   campaignId?: string;
   callId?: string;
-  audioData?: string; // base64 encoded
+  audioData?: string; // base64 encoded audio chunk
   text?: string;
   context?: any;
+  accountId?: string;
 }
 
 interface ConversationContext {
@@ -27,14 +28,21 @@ interface ConversationContext {
 const conversations = new Map<string, ConversationContext>();
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Check for WebSocket upgrade
+  const upgradeHeader = req.headers.get("upgrade") || "";
+  if (upgradeHeader.toLowerCase() === "websocket") {
+    return handleWebSocket(req);
+  }
+
+  // Fallback to HTTP for backwards compatibility
   try {
     const { type, campaignId, callId, audioData, text, context }: VoiceMessage = await req.json();
-
-    console.log(`[Voice Orchestrator] Received ${type} request for call ${callId}`);
+    console.log(`[Voice Orchestrator] HTTP request: ${type}`);
 
     switch (type) {
       case 'start_call':
@@ -53,7 +61,7 @@ serve(async (req) => {
         throw new Error(`Unknown message type: ${type}`);
     }
   } catch (error) {
-    console.error('[Voice Orchestrator] Error:', error);
+    console.error('[Voice Orchestrator] HTTP Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: errorMessage }),
@@ -61,6 +69,141 @@ serve(async (req) => {
     );
   }
 });
+
+// ==================== WebSocket Handler ====================
+function handleWebSocket(req: Request): Response {
+  const { socket, response } = Deno.upgradeWebSocket(req);
+  
+  let currentCallId: string | null = null;
+
+  socket.onopen = () => {
+    console.log('[WebSocket] Client connected');
+  };
+
+  socket.onmessage = async (event) => {
+    try {
+      const message: VoiceMessage = JSON.parse(event.data);
+      console.log(`[WebSocket] Received: ${message.type}`);
+
+      switch (message.type) {
+        case 'start_call': {
+          const callId = crypto.randomUUID();
+          currentCallId = callId;
+          
+          // Initialize conversation context
+          conversations.set(callId, {
+            callId,
+            campaignId: message.campaignId!,
+            accountId: message.accountId!,
+            history: [],
+            metadata: {},
+          });
+
+          console.log(`[WebSocket] Started call ${callId}`);
+          
+          socket.send(JSON.stringify({
+            type: 'call_started',
+            callId,
+            status: 'connected'
+          }));
+          break;
+        }
+
+        case 'audio_chunk': {
+          if (!currentCallId) {
+            throw new Error('No active call');
+          }
+
+          // TODO: Buffer and process audio chunks in real-time
+          // For now, just acknowledge receipt
+          console.log(`[WebSocket] Received audio chunk for call ${currentCallId}`);
+          
+          // Echo back for testing
+          socket.send(JSON.stringify({
+            type: 'audio_received',
+            callId: currentCallId
+          }));
+          break;
+        }
+
+        case 'user_text': {
+          if (!currentCallId) {
+            throw new Error('No active call');
+          }
+
+          const context = conversations.get(currentCallId);
+          if (!context) {
+            throw new Error(`Call ${currentCallId} not found`);
+          }
+
+          // Send transcript to client
+          socket.send(JSON.stringify({
+            type: 'transcript',
+            text: message.text,
+            speaker: 'user'
+          }));
+
+          // Process with AI
+          const aiResponse = await processWithAI(message.text!, context);
+          
+          // Send AI transcript
+          socket.send(JSON.stringify({
+            type: 'transcript',
+            text: aiResponse,
+            speaker: 'assistant'
+          }));
+
+          // Generate and send audio response
+          const audioResponse = await synthesizeSpeech(aiResponse);
+          socket.send(JSON.stringify({
+            type: 'audio_response',
+            audioData: audioResponse
+          }));
+          break;
+        }
+
+        case 'end_call': {
+          if (currentCallId) {
+            conversations.delete(currentCallId);
+            console.log(`[WebSocket] Ended call ${currentCallId}`);
+            
+            socket.send(JSON.stringify({
+              type: 'call_ended',
+              callId: currentCallId
+            }));
+            
+            currentCallId = null;
+          }
+          break;
+        }
+
+        default:
+          console.warn(`[WebSocket] Unknown message type: ${message.type}`);
+      }
+    } catch (error) {
+      console.error('[WebSocket] Message error:', error);
+      socket.send(JSON.stringify({
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }));
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error('[WebSocket] Error:', error);
+  };
+
+  socket.onclose = () => {
+    console.log('[WebSocket] Client disconnected');
+    if (currentCallId) {
+      conversations.delete(currentCallId);
+    }
+  };
+
+  return response;
+}
+
+// ==================== HTTP Handlers (Legacy) ====================
 
 async function handleStartCall(campaignId: string, context: any) {
   const callId = crypto.randomUUID();

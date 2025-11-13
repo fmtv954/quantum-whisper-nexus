@@ -22,10 +22,13 @@ export interface VoiceOrchestratorCallbacks {
 
 export class VoiceOrchestrator {
   private room: Room | null = null;
+  private ws: WebSocket | null = null;
   private callbacks: VoiceOrchestratorCallbacks;
   private isConnected = false;
   private callId: string | null = null;
   private audioContext: AudioContext | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
 
   constructor(callbacks: VoiceOrchestratorCallbacks) {
     this.callbacks = callbacks;
@@ -33,37 +36,60 @@ export class VoiceOrchestrator {
 
   async connect(livekitUrl: string, token: string, campaignId: string, accountId: string) {
     try {
-      console.log('[VoiceOrchestrator] Connecting to LiveKit...');
+      console.log('[VoiceOrchestrator] Connecting via WebSocket...');
       
-      this.room = new Room({
-        adaptiveStream: true,
-        dynacast: true,
-        audioCaptureDefaults: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      // Connect to WebSocket endpoint
+      const SUPABASE_PROJECT_ID = 'rwpndifkuwnohkzqmqoa';
+      const wsUrl = `wss://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/voice-orchestrator`;
+      
+      this.ws = new WebSocket(wsUrl);
 
-      // Set up event listeners
-      this.room
-        .on(RoomEvent.Connected, this.handleConnected.bind(this))
-        .on(RoomEvent.Disconnected, this.handleDisconnected.bind(this))
-        .on(RoomEvent.TrackSubscribed, this.handleTrackSubscribed.bind(this))
-        .on(RoomEvent.TrackUnsubscribed, this.handleTrackUnsubscribed.bind(this));
+      // Set up WebSocket handlers
+      this.ws.onopen = () => {
+        console.log('[VoiceOrchestrator] WebSocket connected');
+        
+        // Start call session
+        this.ws!.send(JSON.stringify({
+          type: 'start_call',
+          campaignId,
+          accountId,
+        }));
+      };
 
-      // Connect to room
-      await this.room.connect(livekitUrl, token);
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          this.handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('[VoiceOrchestrator] Failed to parse message:', error);
+        }
+      };
 
-      // Enable microphone
-      await this.room.localParticipant.setMicrophoneEnabled(true);
+      this.ws.onerror = (error) => {
+        console.error('[VoiceOrchestrator] WebSocket error:', error);
+        this.callbacks.onError?.(new Error('WebSocket connection failed'));
+      };
 
-      // Start call session with backend orchestrator
-      await this.startCallSession(campaignId, accountId);
+      this.ws.onclose = () => {
+        console.log('[VoiceOrchestrator] WebSocket disconnected');
+        this.isConnected = false;
+        this.callbacks.onDisconnect?.();
+        
+        // Attempt reconnection
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          console.log(`[VoiceOrchestrator] Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          setTimeout(() => {
+            this.connect(livekitUrl, token, campaignId, accountId);
+          }, 2000 * this.reconnectAttempts);
+        }
+      };
 
-      console.log('[VoiceOrchestrator] Connected successfully');
-      this.isConnected = true;
-      this.callbacks.onConnect?.();
+      // Initialize audio context
+      if (!this.audioContext) {
+        this.audioContext = new AudioContext();
+      }
+
     } catch (error) {
       console.error('[VoiceOrchestrator] Connection error:', error);
       this.callbacks.onError?.(error as Error);
@@ -71,31 +97,46 @@ export class VoiceOrchestrator {
     }
   }
 
-  private async startCallSession(campaignId: string, accountId: string) {
-    try {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'start_call',
-          campaignId,
-          context: { accountId },
-        }),
-      });
+  private handleWebSocketMessage(message: any) {
+    console.log('[VoiceOrchestrator] Received:', message.type);
 
-      if (!response.ok) {
-        throw new Error(`Failed to start call session: ${response.status}`);
-      }
+    switch (message.type) {
+      case 'call_started':
+        this.callId = message.callId;
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.callbacks.onConnect?.();
+        console.log(`[VoiceOrchestrator] Call started: ${this.callId}`);
+        break;
 
-      const { callId } = await response.json();
-      this.callId = callId;
-      console.log(`[VoiceOrchestrator] Call session started: ${callId}`);
-    } catch (error) {
-      console.error('[VoiceOrchestrator] Failed to start call session:', error);
-      throw error;
+      case 'transcript':
+        this.callbacks.onTranscriptDelta?.(message.text, message.speaker);
+        break;
+
+      case 'audio_response':
+        this.playAudioResponse(message.audioData);
+        break;
+
+      case 'audio_received':
+        // Audio chunk acknowledged
+        break;
+
+      case 'call_ended':
+        this.isConnected = false;
+        this.callbacks.onDisconnect?.();
+        break;
+
+      case 'error':
+        console.error('[VoiceOrchestrator] Server error:', message.error);
+        this.callbacks.onError?.(new Error(message.error));
+        break;
+
+      default:
+        console.warn('[VoiceOrchestrator] Unknown message type:', message.type);
     }
   }
+
+  // Removed: startCallSession now handled via WebSocket 'start_call' message
 
   private handleConnected() {
     console.log('[VoiceOrchestrator] Room connected');
@@ -132,6 +173,10 @@ export class VoiceOrchestrator {
   }
 
   async sendMessage(text: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket not connected');
+    }
+
     if (!this.callId) {
       throw new Error('Call session not started');
     }
@@ -139,38 +184,34 @@ export class VoiceOrchestrator {
     console.log('[VoiceOrchestrator] Sending text message:', text);
 
     try {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'user_text',
-          callId: this.callId,
-          text,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to send message: ${response.status}`);
-      }
-
-      const { response: aiResponse, audioResponse } = await response.json();
-      
-      // Notify callbacks
-      this.callbacks.onTranscriptDelta?.(text, 'user');
-      this.callbacks.onTranscriptDelta?.(aiResponse, 'assistant');
-
-      // Play audio response
-      if (audioResponse) {
-        await this.playAudioResponse(audioResponse);
-      }
-
-      return aiResponse;
+      this.ws.send(JSON.stringify({
+        type: 'user_text',
+        callId: this.callId,
+        text,
+      }));
     } catch (error) {
       console.error('[VoiceOrchestrator] Failed to send message:', error);
       this.callbacks.onError?.(error as Error);
       throw error;
     }
+  }
+
+  sendAudioChunk(audioData: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn('[VoiceOrchestrator] WebSocket not ready, skipping audio chunk');
+      return;
+    }
+
+    if (!this.callId) {
+      console.warn('[VoiceOrchestrator] No active call, skipping audio chunk');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'audio_chunk',
+      callId: this.callId,
+      audioData,
+    }));
   }
 
   private async playAudioResponse(base64Audio: string) {
@@ -201,19 +242,18 @@ export class VoiceOrchestrator {
   disconnect() {
     console.log('[VoiceOrchestrator] Disconnecting...');
     
-    // End call session
-    if (this.callId) {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'end_call',
-          callId: this.callId,
-        }),
-      }).catch(error => {
-        console.error('[VoiceOrchestrator] Failed to end call session:', error);
-      });
+    // End call session via WebSocket
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.callId) {
+      this.ws.send(JSON.stringify({
+        type: 'end_call',
+        callId: this.callId,
+      }));
+    }
+
+    // Close WebSocket
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
     }
 
     if (this.audioContext) {
@@ -228,6 +268,7 @@ export class VoiceOrchestrator {
 
     this.isConnected = false;
     this.callId = null;
+    this.reconnectAttempts = 0;
   }
 
   getConnectionState(): boolean {
