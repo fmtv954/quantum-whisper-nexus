@@ -14,6 +14,8 @@ import Dashboard from "./pages/Dashboard";
 import Campaigns from "./pages/Campaigns";
 import CampaignNew from "./pages/CampaignNew";
 import CampaignDetail from "./pages/CampaignDetail";
+import Leads from "./pages/Leads";
+import LeadDetail from "./pages/LeadDetail";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -83,14 +85,30 @@ const App = () => (
             </ProtectedRoute>
           }
         />
-          <Route
-            path="/dev/design-system"
-            element={
-              <ProtectedRoute>
-                <DevDesignSystem />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/leads"
+          element={
+            <ProtectedRoute>
+              <Leads />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/leads/:id"
+          element={
+            <ProtectedRoute>
+              <LeadDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dev/design-system"
+          element={
+            <ProtectedRoute>
+              <DevDesignSystem />
+            </ProtectedRoute>
+          }
+        />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
