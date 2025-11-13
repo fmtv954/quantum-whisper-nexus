@@ -149,3 +149,53 @@ export const LEAD_STATUSES = [
 export function getStatusInfo(status: string) {
   return LEAD_STATUSES.find((s) => s.value === status) || LEAD_STATUSES[0];
 }
+
+/**
+ * Create a new lead for a call with consent
+ */
+export async function createLeadForCall(data: {
+  accountId: string;
+  campaignId: string;
+  callId?: string;
+  email: string;
+  name?: string;
+  consentTicketId: string;
+}): Promise<Lead> {
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .insert({
+      account_id: data.accountId,
+      campaign_id: data.campaignId,
+      call_id: data.callId || null,
+      email: data.email,
+      name: data.name || null,
+      consent_ticket_id: data.consentTicketId,
+      status: "new",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating lead:", error);
+    throw error;
+  }
+
+  return lead as Lead;
+}
+
+/**
+ * Link a lead to a call session
+ */
+export async function linkLeadToCall(leadId: string, callId: string): Promise<void> {
+  const { error } = await supabase
+    .from("leads")
+    .update({ call_id: callId, updated_at: new Date().toISOString() })
+    .eq("id", leadId);
+
+  if (error) {
+    console.error("Error linking lead to call:", error);
+    throw error;
+  }
+}

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Phone, PhoneOff, Clock, Loader2, Send } from "lucide-react";
+import { Phone, PhoneOff, Clock, Loader2, Send, Mic, MicOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceOrchestrator } from "@/lib/audio/VoiceOrchestrator";
 import {
@@ -19,8 +19,10 @@ import {
   recordTranscriptSegments,
   type CallSession,
 } from "@/lib/calls";
+import { createLeadForCall, linkLeadToCall } from "@/lib/leads";
 import { playPhoneRing } from "@/lib/audio/AudioEffects";
 import { recordUsageEvent } from "@/lib/usage";
+import { LeadCaptureModal } from "@/components/LeadCaptureModal";
 
 interface Message {
   id: string;
@@ -45,6 +47,13 @@ export default function Call() {
   const [isRinging, setIsRinging] = useState(false);
   const [userInput, setUserInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  
+  // Lead capture state
+  const [showLeadCapture, setShowLeadCapture] = useState(false);
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [leadEmail, setLeadEmail] = useState<string | null>(null);
+  const [leadName, setLeadName] = useState<string | null>(null);
   
   const voiceOrchestratorRef = useRef<VoiceOrchestrator | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -143,6 +152,43 @@ export default function Call() {
     }
   };
 
+  const handleLeadCaptureSubmit = async (data: {
+    email: string;
+    name?: string;
+    consent: boolean;
+  }) => {
+    if (!campaignId || !campaign) return;
+
+    try {
+      // Generate consent ticket ID
+      const consentTicketId = crypto.randomUUID();
+
+      // Create lead record
+      const lead = await createLeadForCall({
+        accountId: campaign.account_id,
+        campaignId,
+        email: data.email,
+        name: data.name,
+        consentTicketId,
+      });
+
+      setLeadId(lead.id);
+      setLeadEmail(data.email);
+      setLeadName(data.name || null);
+      setShowLeadCapture(false);
+
+      // Now start the call
+      await handleStartCall();
+    } catch (error) {
+      console.error("[Call] Error creating lead:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save your information. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleStartCall = async () => {
     if (!campaignId || !campaign) return;
 
@@ -159,6 +205,11 @@ export default function Call() {
       // Create call session in database
       const session = await createCallSession(campaignId);
       setCallSession(session);
+
+      // Link lead to call if we have a lead
+      if (leadId) {
+        await linkLeadToCall(leadId, session.id);
+      }
 
       // Get LiveKit token
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
@@ -264,6 +315,14 @@ export default function Call() {
     }
   };
 
+  const handleToggleMute = () => {
+    if (voiceOrchestratorRef.current) {
+      const newMutedState = !isMuted;
+      voiceOrchestratorRef.current.setMicrophoneEnabled(!newMutedState);
+      setIsMuted(newMutedState);
+    }
+  };
+
   const handleEndCall = async () => {
     if (!callSession) return;
 
@@ -277,7 +336,7 @@ export default function Call() {
       // Flush transcripts
       await flushTranscriptBuffer();
 
-      // End call session in database
+      // End call session in database (don't create lead since we already have one)
       const { session } = await endCallSession(callSession.id, { createLead: false });
 
       // Record usage for Deepgram STT, OpenAI LLM, Deepgram TTS, LiveKit
@@ -510,7 +569,7 @@ export default function Call() {
           {!isCallActive && !isCallEnded && (
             <Button
               size="lg"
-              onClick={handleStartCall}
+              onClick={() => setShowLeadCapture(true)}
               disabled={isConnecting}
               className="min-w-[200px]"
             >
@@ -529,15 +588,34 @@ export default function Call() {
           )}
 
           {isCallActive && (
-            <Button
-              size="lg"
-              variant="destructive"
-              onClick={handleEndCall}
-              className="min-w-[200px]"
-            >
-              <PhoneOff className="mr-2 h-5 w-5" />
-              End Call
-            </Button>
+            <>
+              <Button
+                size="lg"
+                variant={isMuted ? "secondary" : "outline"}
+                onClick={handleToggleMute}
+              >
+                {isMuted ? (
+                  <>
+                    <MicOff className="mr-2 h-5 w-5" />
+                    Unmute
+                  </>
+                ) : (
+                  <>
+                    <Mic className="mr-2 h-5 w-5" />
+                    Mute
+                  </>
+                )}
+              </Button>
+              <Button
+                size="lg"
+                variant="destructive"
+                onClick={handleEndCall}
+                className="min-w-[200px]"
+              >
+                <PhoneOff className="mr-2 h-5 w-5" />
+                End Call
+              </Button>
+            </>
           )}
 
           {isCallEnded && (
@@ -555,6 +633,14 @@ export default function Call() {
           )}
         </div>
       </div>
+
+      {/* Lead Capture Modal */}
+      <LeadCaptureModal
+        open={showLeadCapture}
+        onSubmit={handleLeadCaptureSubmit}
+        onCancel={() => setShowLeadCapture(false)}
+        campaignName={campaign?.name || ""}
+      />
     </div>
   );
 }

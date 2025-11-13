@@ -233,4 +233,14 @@ export class VoiceOrchestrator {
   getConnectionState(): boolean {
     return this.isConnected;
   }
+
+  /**
+   * Enable or disable microphone
+   */
+  setMicrophoneEnabled(enabled: boolean) {
+    if (this.room) {
+      this.room.localParticipant.setMicrophoneEnabled(enabled);
+      console.log(`[VoiceOrchestrator] Microphone ${enabled ? 'enabled' : 'disabled'}`);
+    }
+  }
 }
