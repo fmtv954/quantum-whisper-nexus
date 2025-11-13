@@ -102,9 +102,7 @@ export default function Call() {
     }
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [callSession]);
 
@@ -113,97 +111,156 @@ export default function Call() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeChatRef.current) {
+        realtimeChatRef.current.disconnect();
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleStartCall = async () => {
-    if (!campaignId) return;
-
-    try {
-      setLoading(true);
-      const session = await createCallSession(campaignId);
-      setCallSession(session);
-
-      // Add initial greeting from agent
-      const greeting =
-        "Hello! Thanks for connecting. I'm your AI assistant. How can I help you today?";
-      
-      await appendTranscriptSegment(session.id, "ai_agent", greeting);
-      
-      setMessages([
-        {
-          id: "greeting",
-          speaker: "ai_agent",
-          text: greeting,
-          timestamp: new Date(),
-        },
-      ]);
-
-      toast({
-        title: "Call started",
-        description: "You're now connected (demo mode - text only)",
-      });
-    } catch (error) {
-      console.error("Error starting call:", error);
-      toast({
-        title: "Error starting call",
-        description: "Please try again or contact support.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+  const flushTranscriptBuffer = async () => {
+    if (transcriptBufferRef.current.length > 0 && callSession) {
+      try {
+        await recordTranscriptSegments(callSession.id, transcriptBufferRef.current);
+        transcriptBufferRef.current = [];
+      } catch (error) {
+        console.error("Error flushing transcripts:", error);
+      }
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || !callSession || sending) return;
+  const handleStartCall = async () => {
+    if (!campaignId) return;
 
-    const userText = inputMessage.trim();
-    setInputMessage("");
-    setSending(true);
-
+    setIsConnecting(true);
     try {
-      // Add user message
-      const userMsg: Message = {
-        id: `user-${Date.now()}`,
-        speaker: "caller",
-        text: userText,
-        timestamp: new Date(),
+      console.log("[Call] Starting call session...");
+
+      // Create call session in database
+      const session = await createCallSession(campaignId);
+      setCallSession(session);
+
+      // Load flow for campaign
+      const flow = await getFlowForCampaign(campaignId);
+      if (!flow) {
+        throw new Error("No flow configured for this campaign");
+      }
+
+      console.log("[Call] Flow loaded:", flow.name);
+
+      // Initialize flow context
+      const startNode = flow.definition.nodes.find(n => n.type === "start");
+      if (!startNode) {
+        throw new Error("Flow must have a start node");
+      }
+
+      flowContextRef.current = {
+        flowDefinition: flow.definition,
+        currentNodeId: startNode.id,
+        conversationHistory: [],
+        leadData: {},
       };
-      setMessages((prev) => [...prev, userMsg]);
 
-      // Save to database
-      await appendTranscriptSegment(callSession.id, "caller", userText);
+      // Build system prompt from flow
+      const systemPrompt = buildSystemPromptFromFlow(flow.definition);
 
-      // Generate AI response (stub)
-      const aiResponse = generateStubAIResponse(userText);
+      // Initialize RealtimeChat
+      const realtimeChat = new RealtimeChat({
+        onConnect: () => {
+          console.log("[Call] Connected to voice AI");
+          setIsConnected(true);
+          setIsConnecting(false);
+          
+          // Start with greeting from flow
+          if (flowContextRef.current) {
+            runFlowStep(flowContextRef.current).then(result => {
+              const greeting: Message = {
+                id: Date.now().toString(),
+                speaker: "assistant",
+                text: result.agentText,
+                timestamp: new Date(),
+              };
+              setMessages([greeting]);
+              
+              // Buffer for DB
+              transcriptBufferRef.current.push({
+                speaker: "ai_agent",
+                text: result.agentText,
+              });
 
-      // Simulate brief delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+              // Update flow context
+              if (result.nextNodeId) {
+                flowContextRef.current!.currentNodeId = result.nextNodeId;
+              }
+            });
+          }
+        },
+        onDisconnect: () => {
+          console.log("[Call] Disconnected");
+          setIsConnected(false);
+          flushTranscriptBuffer();
+        },
+        onTranscriptDelta: (text, speaker) => {
+          console.log(`[Call] Transcript delta: ${speaker} - ${text}`);
+          
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && lastMsg.speaker === speaker) {
+              // Append to existing message
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMsg, text: lastMsg.text + text },
+              ];
+            } else {
+              // New message
+              return [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  speaker,
+                  text,
+                  timestamp: new Date(),
+                },
+              ];
+            }
+          });
+        },
+        onSpeakingChange: (speaking) => {
+          setIsSpeaking(speaking);
+        },
+        onError: (error) => {
+          console.error("[Call] Error:", error);
+          toast({
+            title: "Call Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      });
 
-      // Add AI message
-      const aiMsg: Message = {
-        id: `agent-${Date.now()}`,
-        speaker: "ai_agent",
-        text: aiResponse,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      await realtimeChat.init(systemPrompt, "alloy");
+      realtimeChatRef.current = realtimeChat;
 
-      // Save to database
-      await appendTranscriptSegment(callSession.id, "ai_agent", aiResponse);
+      console.log("[Call] Call started successfully");
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error starting call:", error);
+      setIsConnecting(false);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to start call",
         variant: "destructive",
       });
-    } finally {
-      setSending(false);
     }
   };
 
@@ -211,233 +268,205 @@ export default function Call() {
     if (!callSession) return;
 
     try {
-      setLoading(true);
-      const { session, leadId } = await endCallSession(callSession.id, {
-        createLead: true,
-      });
+      console.log("[Call] Ending call...");
+
+      // Disconnect realtime chat
+      if (realtimeChatRef.current) {
+        realtimeChatRef.current.disconnect();
+        realtimeChatRef.current = null;
+      }
+
+      // Flush remaining transcripts
+      await flushTranscriptBuffer();
+
+      // End session in DB
+      const { session } = await endCallSession(callSession.id, { createLead: true });
 
       setCallSession(session);
+      setIsConnected(false);
 
       toast({
-        title: "Call ended",
-        description: leadId
-          ? "A lead has been created from this call."
-          : "Call completed successfully.",
+        title: "Call Ended",
+        description: `Duration: ${formatTime(Math.floor((session.duration_ms || 0) / 1000))}`,
       });
 
-      // Show end call summary
-      setTimeout(() => {
-        if (leadId) {
-          navigate(`/leads/${leadId}`);
-        } else {
-          navigate("/dashboard");
-        }
-      }, 2000);
+      console.log("[Call] Call ended successfully");
     } catch (error) {
       console.error("Error ending call:", error);
       toast({
-        title: "Error ending call",
-        description: "Please try again.",
+        title: "Error",
+        description: "Failed to end call properly",
         variant: "destructive",
       });
-      setLoading(false);
     }
   };
 
-  if (loading && !campaign) {
+  const buildSystemPromptFromFlow = (flowDef: any): string => {
+    const startNode = flowDef.nodes.find((n: any) => n.type === "start");
+    const ragNode = flowDef.nodes.find((n: any) => n.type === "rag_answer");
+    
+    let prompt = "You are a helpful AI assistant conducting a voice conversation. ";
+    
+    if (ragNode?.system_prompt) {
+      prompt += ragNode.system_prompt + " ";
+    }
+    
+    if (ragNode?.tone) {
+      prompt += `Maintain a ${ragNode.tone} tone. `;
+    }
+    
+    prompt += "Keep your responses concise and conversational. ";
+    prompt += "If the user wants to end the conversation, acknowledge it gracefully.";
+    
+    return prompt;
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Loading campaign...</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!campaign) {
-    return null;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">Campaign not found</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
-  const isCallActive = callSession && callSession.status === "active";
+  const isCallActive = callSession && callSession.status === "in_progress";
   const isCallEnded = callSession && callSession.status === "completed";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex flex-col">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container max-w-4xl mx-auto px-4 py-4">
+      <div className="border-b bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold">{campaign.name}</h1>
-              <p className="text-sm text-muted-foreground">
-                {isCallActive && "Call in progress"}
-                {isCallEnded && "Call ended"}
-                {!callSession && "Ready to connect"}
-              </p>
+              <h1 className="text-2xl font-bold">{campaign.name}</h1>
+              {campaign.description && (
+                <p className="text-sm text-muted-foreground mt-1">{campaign.description}</p>
+              )}
             </div>
             <div className="flex items-center gap-4">
               {isCallActive && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-mono text-sm">{formatTime(elapsedTime)}</span>
+                <div className="flex items-center gap-2 text-sm font-mono">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <span>{formatTime(elapsedTime)}</span>
                 </div>
               )}
-              {isCallActive ? (
-                <Badge variant="default" className="animate-pulse">
-                  <div className="h-2 w-2 bg-green-500 rounded-full mr-2" />
-                  Connected
-                </Badge>
-              ) : isCallEnded ? (
-                <Badge variant="secondary">Ended</Badge>
-              ) : (
-                <Badge variant="outline">Ready</Badge>
-              )}
+              <Badge variant={isConnected ? "default" : isConnecting ? "secondary" : "outline"}>
+                {isConnected ? "Connected" : isConnecting ? "Connecting..." : "Ready"}
+              </Badge>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        {!callSession ? (
-          // Pre-call screen
-          <Card>
-            <CardHeader>
-              <CardTitle>Start Your Conversation</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Demo Mode:</strong> This is a
-                  text-based simulation. In production, you'll have a natural voice
-                  conversation powered by AI.
-                </p>
-              </div>
-              {campaign.description && (
-                <p className="text-sm">{campaign.description}</p>
+      <div className="flex-1 container mx-auto px-4 py-8 flex flex-col max-w-4xl">
+        {/* Transcript Area */}
+        <Card className="flex-1 mb-6 flex flex-col">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Conversation
+              {isSpeaking && (
+                <Badge variant="secondary" className="ml-auto">
+                  AI Speaking
+                </Badge>
               )}
-              <Button onClick={handleStartCall} disabled={loading} size="lg" className="w-full">
-                <Phone className="mr-2 h-5 w-5" />
-                Start Call
-              </Button>
-            </CardContent>
-          </Card>
-        ) : isCallEnded ? (
-          // Post-call screen
-          <Card>
-            <CardHeader>
-              <CardTitle>Call Complete</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center py-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/10 mb-4">
-                  <Phone className="h-8 w-8 text-green-500" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto min-h-[400px] space-y-4">
+            {messages.length === 0 && !isConnected && (
+              <div className="h-full flex items-center justify-center text-center text-muted-foreground">
+                <div>
+                  <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Press Start Call to begin your voice conversation</p>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Thank you for calling!</h3>
-                <p className="text-muted-foreground mb-4">
-                  Duration: {formatTime(elapsedTime)}
-                </p>
-                <p className="text-sm text-muted-foreground mb-6">
-                  A lead has been created from this conversation. You'll be redirected
-                  shortly...
-                </p>
               </div>
-              <div className="flex gap-3">
-                <Button variant="outline" asChild className="flex-1">
-                  <Link to="/dashboard">Go to Dashboard</Link>
-                </Button>
-                <Button asChild className="flex-1">
-                  <Link to="/leads">View Leads</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          // Active call screen
-          <div className="space-y-4">
-            {/* Transcript */}
-            <Card className="h-[500px] flex flex-col">
-              <CardHeader className="border-b">
-                <CardTitle className="text-base">Conversation</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.speaker === "caller" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                        msg.speaker === "caller"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      <p className="text-sm">{msg.text}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          msg.speaker === "caller"
-                            ? "text-primary-foreground/70"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {msg.timestamp.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </CardContent>
-            </Card>
-
-            {/* Input Area */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex gap-2">
-                  <Input
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    placeholder="Type your message... (simulating speech)"
-                    disabled={sending}
-                  />
-                  <Button onClick={handleSendMessage} disabled={sending || !inputMessage.trim()}>
-                    {sending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Demo mode: Type to simulate speaking. Press Enter to send.
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Controls */}
-            <div className="flex justify-center">
-              <Button
-                onClick={handleEndCall}
-                variant="destructive"
-                size="lg"
-                disabled={loading}
+            )}
+            
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.speaker === "user" ? "justify-end" : "justify-start"}`}
               >
-                <PhoneOff className="mr-2 h-5 w-5" />
-                End Call
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                    msg.speaker === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted"
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                  <span className="text-xs opacity-70 mt-1 block">
+                    {msg.timestamp.toLocaleTimeString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </CardContent>
+        </Card>
+
+        {/* Call Controls */}
+        <div className="flex justify-center gap-4">
+          {!isCallActive && !isCallEnded && (
+            <Button
+              size="lg"
+              onClick={handleStartCall}
+              disabled={isConnecting}
+              className="min-w-[200px]"
+            >
+              {isConnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Phone className="mr-2 h-5 w-5" />
+                  Start Call
+                </>
+              )}
+            </Button>
+          )}
+
+          {isCallActive && (
+            <Button
+              size="lg"
+              variant="destructive"
+              onClick={handleEndCall}
+              className="min-w-[200px]"
+            >
+              <PhoneOff className="mr-2 h-5 w-5" />
+              End Call
+            </Button>
+          )}
+
+          {isCallEnded && (
+            <div className="text-center space-y-4">
+              <Badge variant="secondary" className="text-lg px-4 py-2">
+                Call Ended
+              </Badge>
+              <div className="text-sm text-muted-foreground">
+                Duration: {formatTime(Math.floor((callSession.duration_ms || 0) / 1000))}
+              </div>
+              <Button asChild variant="outline">
+                <Link to="/dashboard">Back to Dashboard</Link>
               </Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
