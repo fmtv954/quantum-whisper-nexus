@@ -13,6 +13,7 @@ interface VoiceMessage {
   text?: string;
   context?: any;
   accountId?: string;
+  roomName?: string;
 }
 
 interface ConversationContext {
@@ -96,16 +97,16 @@ function handleWebSocket(req: Request): Response {
             campaignId: message.campaignId!,
             accountId: message.accountId!,
             history: [],
-            metadata: {},
+            metadata: { roomName: message.roomName },
             currentTranscript: '',
           };
           
-          // Initialize Deepgram STT WebSocket
+          // Initialize Deepgram STT WebSocket for 16kHz Opus audio from LiveKit
           await initializeDeepgramSTT(context, socket);
           
           conversations.set(callId, context);
 
-          console.log(`[WebSocket] Started call ${callId}`);
+          console.log(`[WebSocket] Started call ${callId} with LiveKit room: ${message.roomName}`);
           
           socket.send(JSON.stringify({
             type: 'call_started',
@@ -116,6 +117,7 @@ function handleWebSocket(req: Request): Response {
         }
 
         case 'audio_chunk': {
+          // Audio chunks from LiveKit client (16kHz Opus encoded as base64)
           if (!currentCallId) {
             throw new Error('No active call');
           }
@@ -125,9 +127,9 @@ function handleWebSocket(req: Request): Response {
             throw new Error(`Call ${currentCallId} not found`);
           }
 
-          // Forward audio chunk to Deepgram STT
+          // Forward audio chunk to Deepgram STT (expecting 16kHz Opus from LiveKit)
           if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
-            // Decode base64 audio data
+            // Decode base64 audio data (16kHz Opus from LiveKit)
             const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
             context.deepgramWs.send(audioBytes);
           } else {
@@ -224,7 +226,7 @@ function handleWebSocket(req: Request): Response {
   return response;
 }
 
-// ==================== Deepgram STT Streaming ====================
+// ==================== Deepgram STT Streaming (16kHz Opus) ====================
 
 async function initializeDeepgramSTT(context: ConversationContext, clientSocket: WebSocket) {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
