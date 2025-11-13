@@ -11,6 +11,9 @@ import VerifyEmail from "./pages/VerifyEmail";
 import OnboardingWelcome from "./pages/onboarding/Welcome";
 import OnboardingCampaignSetup from "./pages/onboarding/CampaignSetup";
 import Dashboard from "./pages/Dashboard";
+import Campaigns from "./pages/Campaigns";
+import CampaignNew from "./pages/CampaignNew";
+import CampaignDetail from "./pages/CampaignDetail";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -48,14 +51,38 @@ const App = () => (
           />
           
           {/* Protected app routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/campaigns"
+          element={
+            <ProtectedRoute>
+              <Campaigns />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/campaigns/new"
+          element={
+            <ProtectedRoute>
+              <CampaignNew />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/campaigns/:id"
+          element={
+            <ProtectedRoute>
+              <CampaignDetail />
+            </ProtectedRoute>
+          }
+        />
           <Route
             path="/dev/design-system"
             element={
