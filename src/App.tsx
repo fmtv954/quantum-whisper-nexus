@@ -17,6 +17,7 @@ import CampaignDetail from "./pages/CampaignDetail";
 import Leads from "./pages/Leads";
 import LeadDetail from "./pages/LeadDetail";
 import Call from "./pages/Call";
+import FlowDesigner from "./pages/FlowDesigner";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -107,6 +108,16 @@ const App = () => (
           element={
             <ProtectedRoute>
               <DevDesignSystem />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Flow Designer - protected */}
+        <Route
+          path="/flows/designer/:campaignId"
+          element={
+            <ProtectedRoute>
+              <FlowDesigner />
             </ProtectedRoute>
           }
         />
