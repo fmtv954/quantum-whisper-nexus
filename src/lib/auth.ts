@@ -129,6 +129,55 @@ export async function getSession() {
 }
 
 /**
+ * Determine the post-login redirect URL
+ * New users with no campaigns go to onboarding, existing users go to dashboard
+ */
+export async function getPostLoginRedirect(): Promise<string> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return '/login';
+
+    // Get user's profile
+    const { data: userData } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!userData) return '/onboarding/welcome';
+
+    // Get user's account memberships
+    const { data: memberships } = await supabase
+      .from('account_memberships')
+      .select('account_id')
+      .eq('user_id', userData.id);
+
+    if (!memberships || memberships.length === 0) {
+      return '/onboarding/welcome';
+    }
+
+    // Check if any of their accounts have campaigns
+    const accountIds = memberships.map(m => m.account_id);
+    const { data: campaigns } = await supabase
+      .from('campaigns')
+      .select('id')
+      .in('account_id', accountIds)
+      .limit(1);
+
+    // If no campaigns exist, go to onboarding
+    if (!campaigns || campaigns.length === 0) {
+      return '/onboarding/welcome';
+    }
+
+    // Existing user with campaigns goes to dashboard
+    return '/dashboard';
+  } catch (error) {
+    console.error('Error determining redirect:', error);
+    return '/dashboard';
+  }
+}
+
+/**
  * Request password reset email
  */
 export async function resetPassword(email: string) {

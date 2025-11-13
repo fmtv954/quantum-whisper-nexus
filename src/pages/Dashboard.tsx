@@ -7,13 +7,32 @@
  * Future dashboard implementation should expand on this foundation.
  */
 
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { AppShell } from '@/components/layout/AppShell';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Phone, Users, Target, DollarSign, Plus, Radio } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
+  const location = useLocation();
+  const { toast } = useToast();
+
+  // Show welcome toast if coming from onboarding
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.onboardingComplete) {
+      toast({
+        title: "🎉 You're all set!",
+        description: "Your first campaign has been created. Let's customize it to match your needs.",
+      });
+      // Clear the state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location, toast]);
+
   return (
     <AppShell>
       <div className="space-y-6">

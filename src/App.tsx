@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
+import OnboardingWelcome from "./pages/onboarding/Welcome";
+import OnboardingCampaignSetup from "./pages/onboarding/CampaignSetup";
 import Dashboard from "./pages/Dashboard";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
@@ -27,7 +29,25 @@ const App = () => (
           <Route path="/signup" element={<Signup />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           
-          {/* Protected routes */}
+          {/* Onboarding routes (protected) */}
+          <Route
+            path="/onboarding/welcome"
+            element={
+              <ProtectedRoute>
+                <OnboardingWelcome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/campaign-setup"
+            element={
+              <ProtectedRoute>
+                <OnboardingCampaignSetup />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Protected app routes */}
           <Route
             path="/dashboard"
             element={

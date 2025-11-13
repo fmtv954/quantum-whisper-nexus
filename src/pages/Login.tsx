@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { signIn, getCurrentUser } from "@/lib/auth";
+import { signIn, getCurrentUser, getPostLoginRedirect } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +47,9 @@ export default function Login() {
     }
 
     if (user) {
-      const from = (location.state as any)?.from?.pathname || "/dashboard";
+      // Determine where to redirect based on user's state
+      const redirectPath = await getPostLoginRedirect();
+      const from = (location.state as any)?.from?.pathname || redirectPath;
       navigate(from, { replace: true });
     }
 

@@ -67,12 +67,13 @@ export default function Signup() {
         // Email confirmation required
         navigate("/verify-email", { state: { email } });
       } else {
-        // Auto-confirmed, redirect to dashboard
+        // Auto-confirmed, redirect to onboarding for new users
         toast({
           title: "Welcome to Quantum Voice AI!",
-          description: "Your account has been created successfully.",
+          description: "Let's get you set up with your first campaign.",
         });
-        navigate("/dashboard");
+        // New signups always go to onboarding
+        navigate("/onboarding/welcome");
       }
     }
 
