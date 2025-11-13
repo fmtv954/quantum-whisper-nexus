@@ -41,6 +41,7 @@ import {
   HelpCircle,
   Rocket,
   LogOut,
+  Headphones,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,12 @@ const navigationItems: NavItem[] = [
     label: 'Leads',
     href: '/leads',
     icon: Users,
-    badge: '12',
+    section: 'main',
+  },
+  {
+    label: 'Agent Workspace',
+    href: '/agent/dashboard',
+    icon: Headphones,
     section: 'main',
   },
   {

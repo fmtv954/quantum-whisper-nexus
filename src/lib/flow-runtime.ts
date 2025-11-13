@@ -24,7 +24,7 @@ export interface FlowContext {
 export interface FlowStepResult {
   agentText: string;
   nextNodeId: string | null;
-  actions: string[]; // e.g., ["END_CALL", "CREATE_LEAD", "REQUEST_HANDOFF"]
+  actions: string[]; // e.g., ["END_CALL", "CREATE_LEAD", "REQUEST_HANDOFF", "PUT_ON_HOLD"]
   shouldEndCall: boolean;
 }
 

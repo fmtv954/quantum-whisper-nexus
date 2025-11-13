@@ -21,6 +21,9 @@ import FlowDesigner from "./pages/FlowDesigner";
 import Knowledge from "./pages/Knowledge";
 import KnowledgeDocuments from "./pages/KnowledgeDocuments";
 import KnowledgeUpload from "./pages/KnowledgeUpload";
+import AgentDashboard from "./pages/agent/Dashboard";
+import AgentCalls from "./pages/agent/Calls";
+import HandoffDetail from "./pages/agent/HandoffDetail";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -147,6 +150,32 @@ const App = () => (
           element={
             <ProtectedRoute>
               <KnowledgeUpload />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Agent Workspace - protected */}
+        <Route
+          path="/agent/dashboard"
+          element={
+            <ProtectedRoute>
+              <AgentDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/agent/calls"
+          element={
+            <ProtectedRoute>
+              <AgentCalls />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/agent/handoff/:handoffId"
+          element={
+            <ProtectedRoute>
+              <HandoffDetail />
             </ProtectedRoute>
           }
         />

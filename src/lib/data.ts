@@ -37,6 +37,24 @@ export async function getCurrentAccountId(): Promise<string | null> {
   }
 }
 
+/**
+ * Get the current user's ID from the users table
+ */
+export async function getCurrentUserId(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (!userData) throw new Error("User profile not found");
+
+  return userData.id;
+}
+
 export interface DashboardMetrics {
   activeCampaigns: number;
   totalCampaigns: number;
