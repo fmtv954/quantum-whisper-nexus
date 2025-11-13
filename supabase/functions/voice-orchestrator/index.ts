@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +9,7 @@ interface VoiceMessage {
   type: 'start_call' | 'audio_chunk' | 'user_audio' | 'user_text' | 'end_call';
   campaignId?: string;
   callId?: string;
-  audioData?: string; // base64 encoded audio chunk
+  audioData?: string;
   text?: string;
   context?: any;
   accountId?: string;
@@ -24,7 +23,6 @@ interface ConversationContext {
   metadata: any;
 }
 
-// In-memory conversation storage (will move to Redis in Phase 2)
 const conversations = new Map<string, ConversationContext>();
 
 serve(async (req) => {
@@ -314,47 +312,28 @@ async function handleEndCall(callId: string) {
 
 async function transcribeAudio(audioData: string): Promise<string> {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-  if (!DEEPGRAM_API_KEY) {
-    throw new Error('DEEPGRAM_API_KEY not configured');
-  }
+  if (!DEEPGRAM_API_KEY) throw new Error('DEEPGRAM_API_KEY not configured');
 
-  // Decode base64 audio
   const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
-
   const response = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&punctuate=true', {
     method: 'POST',
-    headers: {
-      'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-      'Content-Type': 'audio/wav',
-    },
+    headers: { 'Authorization': `Token ${DEEPGRAM_API_KEY}`, 'Content-Type': 'audio/wav' },
     body: audioBytes,
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('[STT Error]', error);
-    throw new Error(`Deepgram STT failed: ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`Deepgram STT failed: ${response.status}`);
   const result = await response.json();
-  const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-  
-  return transcript;
+  return result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
 }
 
 async function searchWeb(query: string): Promise<string> {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
-  if (!TAVILY_API_KEY) {
-    console.warn('[Search] TAVILY_API_KEY not configured, skipping search');
-    return '';
-  }
+  if (!TAVILY_API_KEY) return '';
 
   try {
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query,
@@ -363,24 +342,13 @@ async function searchWeb(query: string): Promise<string> {
       }),
     });
 
-    if (!response.ok) {
-      console.error('[Search] Tavily API failed:', response.status);
-      return '';
-    }
-
+    if (!response.ok) return '';
     const result = await response.json();
     const searchResults = result.results || [];
-    
     if (searchResults.length === 0) return '';
 
-    // Format search results
-    const formattedResults = searchResults
-      .map((r: any) => `- ${r.title}: ${r.content}`)
-      .join('\n');
-
-    return `Search Results:\n${formattedResults}`;
-  } catch (error) {
-    console.error('[Search] Error:', error);
+    return `Search Results:\n${searchResults.map((r: any) => `- ${r.title}: ${r.content}`).join('\n')}`;
+  } catch {
     return '';
   }
 }
@@ -444,68 +412,34 @@ async function processWithAI(userMessage: string, context: ConversationContext):
 
 async function synthesizeSpeech(text: string): Promise<string> {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-  if (!DEEPGRAM_API_KEY) {
-    throw new Error('DEEPGRAM_API_KEY not configured');
-  }
+  if (!DEEPGRAM_API_KEY) throw new Error('DEEPGRAM_API_KEY not configured');
 
   const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
     method: 'POST',
-    headers: {
-      'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Token ${DEEPGRAM_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('[TTS Error]', error);
-    throw new Error(`Deepgram TTS failed: ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`Deepgram TTS failed: ${response.status}`);
   const audioBuffer = await response.arrayBuffer();
-  const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
-  
-  return base64Audio;
+  return btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
 }
 
 function buildSystemPrompt(context: ConversationContext, searchContext?: string): string {
-  let prompt = `You are a helpful AI assistant for a voice-based conversation.
-
-Campaign ID: ${context.campaignId}
-
-Your goal is to:
-1. Answer user questions clearly and concisely
-2. Keep responses short (1-2 sentences) for natural conversation
-3. Collect lead information when appropriate (name, email, phone)
-4. Be friendly, professional, and helpful
-
-Keep your responses conversational and brief.`;
-
-  if (searchContext) {
-    prompt += `\n\nContext from web search:\n${searchContext}\n\nUse this information to provide accurate, up-to-date answers.`;
-  }
-
+  let prompt = `You are a helpful AI assistant for a voice-based conversation.\n\nYour goal is to:\n1. Answer user questions clearly and concisely\n2. Keep responses short (1-2 sentences) for natural conversation\n3. Collect lead information when appropriate (name, email, phone)\n4. Be friendly, professional, and helpful\n\nKeep your responses conversational and brief.`;
+  if (searchContext) prompt += `\n\nContext from web search:\n${searchContext}\n\nUse this information to provide accurate, up-to-date answers.`;
   return prompt;
 }
 
-async function trackUsage(callId: string, usage: {
-  sttDuration: number;
-  llmTokens: number;
-  ttsCharacters: number;
-}) {
+async function trackUsage(callId: string, usage: { sttDuration: number; llmTokens: number; ttsCharacters: number; }) {
   const context = conversations.get(callId);
   if (!context) return;
 
-  console.log(`[Usage] Call ${callId} - STT: ${usage.sttDuration}s, LLM: ${usage.llmTokens} tokens, TTS: ${usage.ttsCharacters} chars`);
-
-  // Calculate costs
-  const sttCost = usage.sttDuration * (0.0077 / 60); // Deepgram: $0.0077/min
-  const llmCost = (usage.llmTokens / 1000000) * 0.075; // Gemini 2.5 Flash: ~$0.075/1M tokens (via Lovable AI)
-  const ttsCost = (usage.ttsCharacters / 1000) * 0.018; // Deepgram: $0.018/1k chars
+  const sttCost = usage.sttDuration * (0.0077 / 60);
+  const llmCost = (usage.llmTokens / 1000000) * 0.075;
+  const ttsCost = (usage.ttsCharacters / 1000) * 0.018;
   const totalCost = sttCost + llmCost + ttsCost;
 
+  console.log(`[Usage] Call ${callId} - STT: ${usage.sttDuration}s, LLM: ${usage.llmTokens} tokens, TTS: ${usage.ttsCharacters} chars`);
   console.log(`[Cost] STT: $${sttCost.toFixed(6)}, LLM (Gemini): $${llmCost.toFixed(6)}, TTS: $${ttsCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
-
-  // TODO: Record to database in Phase 2
 }
