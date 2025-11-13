@@ -21,6 +21,7 @@ import {
 import { getFlowForCampaign } from "@/lib/flows";
 import { runFlowStep, type FlowContext } from "@/lib/flow-runtime";
 import { playPhoneRing, startHoldMusic, stopHoldMusic } from "@/lib/audio/AudioEffects";
+import { recordUsageEvent } from "@/lib/usage";
 
 interface Message {
   id: string;
@@ -320,6 +321,26 @@ export default function Call() {
 
       // End session in DB
       const { session } = await endCallSession(callSession.id, { createLead: true });
+
+      // Track usage: OpenAI Realtime API cost
+      if (session.duration_ms && campaign?.account_id) {
+        const durationMinutes = Math.ceil(session.duration_ms / 60000);
+        try {
+          await recordUsageEvent({
+            accountId: campaign.account_id,
+            campaignId: campaignId,
+            callId: session.id,
+            provider: "openai",
+            service: "realtime-api",
+            unitType: "minutes",
+            units: durationMinutes,
+            unitCostUsd: 0.30, // $0.06 input + $0.24 output avg
+            metadata: { model: "gpt-4o-realtime-preview-2024-12-17" },
+          });
+        } catch (error) {
+          console.warn("Failed to record usage:", error);
+        }
+      }
 
       setCallSession(session);
       setIsConnected(false);
