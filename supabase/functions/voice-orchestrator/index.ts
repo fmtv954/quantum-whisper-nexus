@@ -21,6 +21,8 @@ interface ConversationContext {
   accountId: string;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   metadata: any;
+  deepgramWs?: WebSocket;
+  currentTranscript?: string;
 }
 
 const conversations = new Map<string, ConversationContext>();
@@ -89,13 +91,19 @@ function handleWebSocket(req: Request): Response {
           currentCallId = callId;
           
           // Initialize conversation context
-          conversations.set(callId, {
+          const context: ConversationContext = {
             callId,
             campaignId: message.campaignId!,
             accountId: message.accountId!,
             history: [],
             metadata: {},
-          });
+            currentTranscript: '',
+          };
+          
+          // Initialize Deepgram STT WebSocket
+          await initializeDeepgramSTT(context, socket);
+          
+          conversations.set(callId, context);
 
           console.log(`[WebSocket] Started call ${callId}`);
           
@@ -112,16 +120,19 @@ function handleWebSocket(req: Request): Response {
             throw new Error('No active call');
           }
 
-          // Buffer audio chunk for STT processing (Step 3)
-          const chunkSize = message.audioData ? message.audioData.length : 0;
-          console.log(`[WebSocket] Received audio chunk for call ${currentCallId} (${chunkSize} bytes)`);
-          
-          // TODO Step 3: Forward to Deepgram STT streaming API
-          // For now, acknowledge receipt
-          socket.send(JSON.stringify({
-            type: 'audio_received',
-            callId: currentCallId
-          }));
+          const context = conversations.get(currentCallId);
+          if (!context) {
+            throw new Error(`Call ${currentCallId} not found`);
+          }
+
+          // Forward audio chunk to Deepgram STT
+          if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
+            // Decode base64 audio data
+            const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
+            context.deepgramWs.send(audioBytes);
+          } else {
+            console.warn(`[WebSocket] Deepgram not ready for call ${currentCallId}`);
+          }
           break;
         }
 
@@ -163,6 +174,13 @@ function handleWebSocket(req: Request): Response {
 
         case 'end_call': {
           if (currentCallId) {
+            const context = conversations.get(currentCallId);
+            
+            // Close Deepgram WebSocket
+            if (context?.deepgramWs) {
+              context.deepgramWs.close();
+            }
+            
             conversations.delete(currentCallId);
             console.log(`[WebSocket] Ended call ${currentCallId}`);
             
@@ -195,11 +213,114 @@ function handleWebSocket(req: Request): Response {
   socket.onclose = () => {
     console.log('[WebSocket] Client disconnected');
     if (currentCallId) {
+      const context = conversations.get(currentCallId);
+      if (context?.deepgramWs) {
+        context.deepgramWs.close();
+      }
       conversations.delete(currentCallId);
     }
   };
 
   return response;
+}
+
+// ==================== Deepgram STT Streaming ====================
+
+async function initializeDeepgramSTT(context: ConversationContext, clientSocket: WebSocket) {
+  const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
+  if (!DEEPGRAM_API_KEY) {
+    console.error('[Deepgram STT] API key not configured');
+    throw new Error('DEEPGRAM_API_KEY not configured');
+  }
+
+  const deepgramUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
+    model: 'nova-2',
+    punctuate: 'true',
+    interim_results: 'true',
+    encoding: 'linear16',
+    sample_rate: '24000',
+    channels: '1',
+  });
+
+  console.log(`[Deepgram STT] Connecting for call ${context.callId}...`);
+  
+  const deepgramWs = new WebSocket(deepgramUrl, {
+    headers: {
+      'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+    },
+  });
+
+  deepgramWs.onopen = () => {
+    console.log(`[Deepgram STT] Connected for call ${context.callId}`);
+  };
+
+  deepgramWs.onmessage = async (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'Results') {
+        const transcript = data.channel?.alternatives?.[0]?.transcript || '';
+        const isFinal = data.is_final;
+        
+        if (transcript) {
+          console.log(`[Deepgram STT] ${isFinal ? 'Final' : 'Interim'}: "${transcript}"`);
+          
+          // Send transcript to client
+          clientSocket.send(JSON.stringify({
+            type: 'transcript',
+            text: transcript,
+            speaker: 'user',
+            isFinal,
+          }));
+          
+          // If final, process with AI
+          if (isFinal) {
+            context.currentTranscript = (context.currentTranscript || '') + ' ' + transcript;
+            
+            // Process with AI and generate response
+            const aiResponse = await processWithAI(transcript, context);
+            
+            // Send AI transcript
+            clientSocket.send(JSON.stringify({
+              type: 'transcript',
+              text: aiResponse,
+              speaker: 'assistant',
+            }));
+            
+            // Generate and send audio response
+            const audioResponse = await synthesizeSpeech(aiResponse);
+            clientSocket.send(JSON.stringify({
+              type: 'audio_response',
+              audioData: audioResponse,
+            }));
+          }
+        }
+      } else if (data.type === 'Metadata') {
+        console.log(`[Deepgram STT] Metadata:`, data);
+      }
+    } catch (error) {
+      console.error('[Deepgram STT] Error processing message:', error);
+    }
+  };
+
+  deepgramWs.onerror = (error) => {
+    console.error(`[Deepgram STT] Error for call ${context.callId}:`, error);
+  };
+
+  deepgramWs.onclose = () => {
+    console.log(`[Deepgram STT] Disconnected for call ${context.callId}`);
+  };
+
+  context.deepgramWs = deepgramWs;
+  
+  // Wait for connection to open
+  await new Promise((resolve) => {
+    if (deepgramWs.readyState === WebSocket.OPEN) {
+      resolve(null);
+    } else {
+      deepgramWs.addEventListener('open', () => resolve(null), { once: true });
+    }
+  });
 }
 
 // ==================== HTTP Handlers (Legacy) ====================
