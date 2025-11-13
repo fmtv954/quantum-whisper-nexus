@@ -91,6 +91,92 @@ This folder contains the canonical documentation for the Quantum Voice AI Platfo
 - Follow the architectural patterns defined in 03-architecture-and-core-flows.md
 - Implement prompting patterns from 06-prompting-and-agent-guidelines.md
 
+---
+
+## AI (Lovable) Behavior Rules
+
+**MANDATORY:** When generating or modifying code, Lovable AI MUST follow these rules:
+
+### 1. Route & Page Structure (docs/05)
+- ✅ **ONLY create routes** explicitly listed in `docs/05-page-inventory-and-routing.md`
+- ✅ **Use correct paths** exactly as specified (e.g., `/flows/designer/[campaignId]`, not `/flow-builder/[id]`)
+- ✅ **Follow build priorities** (Phase 1 MVP first, then Phase 2, etc.)
+- ❌ **DO NOT invent** new top-level routes or sections not in the page inventory
+- ⚠️ **If a new route is needed:** Ask to update `docs/05` first, then implement
+
+### 2. Architecture & Data Flows (docs/03)
+- ✅ **Respect subsystem boundaries** (e.g., Voice Pipeline, Flow Engine, Knowledge Base are separate concerns)
+- ✅ **Follow established data flows** (e.g., Call flow: User → LiveKit → Deepgram STT → GPT → RAG → TTS → User)
+- ✅ **Use correct state management** (React Context for global, TanStack Query for server state, Zustand for complex UI)
+- ❌ **DO NOT bypass** the voice pipeline or create alternative architectures
+- ⚠️ **If architecture changes:** Document in `docs/03` before implementing
+
+### 3. Technology Stack (docs/02)
+- ✅ **ONLY use services** listed in the tech stack (LiveKit, Deepgram, GPT-4-mini, Gemini, Tavily, Supabase, Redis)
+- ✅ **Use specified versions** and configurations from `docs/02`
+- ❌ **DO NOT substitute** providers (e.g., don't use Twilio instead of LiveKit, or Anthropic instead of OpenAI)
+- ❌ **DO NOT add** new major dependencies without explicit approval
+- ⚠️ **If a technology change is proposed:** Update `docs/02` with rationale first
+
+### 4. Design System & Visual Style (docs/04)
+- ✅ **ALWAYS use design tokens** (space_black, matrix_blue, cyber_green, electric_purple, neon_pink, carbon_gray, steel, silver)
+- ✅ **NEVER use direct colors** like `text-white`, `bg-white`, `text-black` - use semantic tokens instead
+- ✅ **Follow layout patterns** (Mission Control, Three-Panel Workspace, Centered Single-Column, Table-Centric)
+- ✅ **Reuse component patterns** (Metric Card, CTA Button variants, Data Table, Modal, Toast, etc.)
+- ✅ **Apply "Cyber Luxury" aesthetic** (SpaceX precision + Google Cloud usability + Amazon conversion)
+- ❌ **DO NOT create** entirely new design languages or ignore the token system
+- ⚠️ **If design needs change:** Propose updates to `docs/04` first
+
+### 5. AI Agent Prompts & Behavior (docs/06)
+- ✅ **Follow prompting guidelines** for conversation flows (concise, helpful, bounded)
+- ✅ **Use specified node types** (Start, Lead Gate, RAG Answer, Clarify, Dispatch, End)
+- ✅ **Apply cost-aware strategies** (GPT-4-mini primary, escalate to larger models only when needed)
+- ✅ **Respect guardrails** (never invent info, never pretend to be human, handle sensitive data properly)
+- ❌ **DO NOT create** custom node types or conversation patterns not in `docs/06`
+- ⚠️ **If new AI patterns are needed:** Document in `docs/06` first
+
+### 6. Conflict Resolution
+- ⚠️ **When a prompt conflicts with docs:**
+  1. **Flag the conflict** explicitly in the response
+  2. **Explain which doc section** is being contradicted
+  3. **Ask for clarification** or confirmation before proceeding
+  4. **Prefer the docs** as the default unless user explicitly overrides
+
+### 7. Documentation Updates
+- ✅ **If implementing a significant new feature:** Suggest updating relevant docs
+- ✅ **If discovering a doc inaccuracy:** Note it and suggest a correction
+- ✅ **Keep docs in sync** with code as the project evolves
+
+---
+
+## Copy-Paste Rule Set for Future Prompts
+
+**Use this template when prompting Lovable:**
+
+```
+[Reference Docs]
+- Route structure: docs/05-page-inventory-and-routing.md
+- Design system: docs/04-design-system-and-ux-principles.md
+- Architecture: docs/03-architecture-and-core-flows.md
+- Tech stack: docs/02-tech-stack-and-integrations.md
+
+[Task]
+Build [feature name] according to the docs above.
+
+[Requirements]
+- Use design tokens from docs/04 (space_black, matrix_blue, etc.)
+- Follow [layout pattern] from docs/04
+- Implement [data flow] from docs/03
+- Use [specific technologies] from docs/02
+- Respect route structure in docs/05
+
+[Verification]
+- Route matches docs/05: [yes/no]
+- Design tokens from docs/04: [yes/no]
+- Architecture from docs/03: [yes/no]
+- Stack from docs/02: [yes/no]
+```
+
 ### Document Maintenance:
 - **Owner:** Technical Lead / Engineering Manager
 - **Review Cycle:** After major feature releases or architectural changes
