@@ -1,0 +1,49 @@
+/**
+ * AudioEffects - Handles phone ring and on-hold music
+ * Separate from RealtimeAudio to avoid WebRTC interference
+ */
+
+let holdMusicAudio: HTMLAudioElement | null = null;
+
+export const playPhoneRing = (): Promise<void> => {
+  return new Promise((resolve) => {
+    const ringAudio = new Audio('/audio/phone-ring.mp3');
+    ringAudio.loop = false;
+    
+    ringAudio.onended = () => {
+      resolve();
+    };
+    
+    ringAudio.onerror = () => {
+      console.error('Error playing phone ring');
+      resolve();
+    };
+    
+    ringAudio.play().catch(err => {
+      console.error('Failed to play phone ring:', err);
+      resolve();
+    });
+  });
+};
+
+export const startHoldMusic = (): void => {
+  if (holdMusicAudio) {
+    stopHoldMusic();
+  }
+  
+  holdMusicAudio = new Audio('/audio/on-hold-music.mp3');
+  holdMusicAudio.loop = true;
+  holdMusicAudio.volume = 0.5;
+  
+  holdMusicAudio.play().catch(err => {
+    console.error('Failed to play hold music:', err);
+  });
+};
+
+export const stopHoldMusic = (): void => {
+  if (holdMusicAudio) {
+    holdMusicAudio.pause();
+    holdMusicAudio.currentTime = 0;
+    holdMusicAudio = null;
+  }
+};

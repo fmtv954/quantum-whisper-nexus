@@ -157,6 +157,9 @@ async function handleRagAnswerNode(
   }
 
   try {
+    // Announce putting on hold
+    const holdAnnouncement = "Let me look that up for you. Please hold for just a moment.";
+    
     // Get relevant context from knowledge base
     const ragContext = await getRagContext(node.knowledge_source_ids, userText);
     
@@ -184,10 +187,11 @@ async function handleRagAnswerNode(
       };
     }
 
+    // Return with hold music actions
     return {
-      agentText,
+      agentText: holdAnnouncement + " " + agentText,
       nextNodeId: node.id, // Stay on RAG node for continued conversation
-      actions: [],
+      actions: ["PUT_ON_HOLD", "REMOVE_FROM_HOLD"],
       shouldEndCall: false,
     };
   } catch (error) {

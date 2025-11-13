@@ -20,6 +20,7 @@ import {
 } from "@/lib/calls";
 import { getFlowForCampaign } from "@/lib/flows";
 import { runFlowStep, type FlowContext } from "@/lib/flow-runtime";
+import { playPhoneRing, startHoldMusic, stopHoldMusic } from "@/lib/audio/AudioEffects";
 
 interface Message {
   id: string;
@@ -41,12 +42,15 @@ export default function Call() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isRinging, setIsRinging] = useState(false);
+  const [isOnHold, setIsOnHold] = useState(false);
   
   const realtimeChatRef = useRef<RealtimeChat | null>(null);
   const flowContextRef = useRef<FlowContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptBufferRef = useRef<Array<{ speaker: "caller" | "ai_agent"; text: string }>>([]);
+  const isOnHoldRef = useRef<boolean>(false);
 
   // Load campaign info
   useEffect(() => {
@@ -144,8 +148,14 @@ export default function Call() {
     if (!campaignId) return;
 
     setIsConnecting(true);
+    setIsRinging(true);
+    
     try {
       console.log("[Call] Starting call session...");
+
+      // Play phone ring (2 times, ~3 seconds)
+      await playPhoneRing();
+      setIsRinging(false);
 
       // Create call session in database
       const session = await createCallSession(campaignId);
@@ -203,6 +213,12 @@ export default function Call() {
               if (result.nextNodeId) {
                 flowContextRef.current!.currentNodeId = result.nextNodeId;
               }
+              
+              // Handle actions from flow
+              if (result.actions.includes("PUT_ON_HOLD")) {
+                setIsOnHold(true);
+                startHoldMusic();
+              }
             });
           }
         },
@@ -218,9 +234,20 @@ export default function Call() {
             const lastMsg = prev[prev.length - 1];
             if (lastMsg && lastMsg.speaker === speaker) {
               // Append to existing message
+              const updatedText = lastMsg.text + text;
+              
+              // Check if AI mentions putting on hold
+              if (speaker === "assistant" && /please hold|hold for|one moment/i.test(updatedText) && !isOnHoldRef.current) {
+                setTimeout(() => {
+                  isOnHoldRef.current = true;
+                  setIsOnHold(true);
+                  startHoldMusic();
+                }, 1000); // Start hold music 1 second after the hold phrase
+              }
+              
               return [
                 ...prev.slice(0, -1),
-                { ...lastMsg, text: lastMsg.text + text },
+                { ...lastMsg, text: updatedText },
               ];
             } else {
               // New message
@@ -238,6 +265,13 @@ export default function Call() {
         },
         onSpeakingChange: (speaking) => {
           setIsSpeaking(speaking);
+          
+          // If AI starts speaking while on hold, stop hold music
+          if (speaking && isOnHoldRef.current) {
+            stopHoldMusic();
+            isOnHoldRef.current = false;
+            setIsOnHold(false);
+          }
         },
         onError: (error) => {
           console.error("[Call] Error:", error);
@@ -269,6 +303,11 @@ export default function Call() {
 
     try {
       console.log("[Call] Ending call...");
+
+      // Stop hold music if playing
+      stopHoldMusic();
+      isOnHoldRef.current = false;
+      setIsOnHold(false);
 
       // Disconnect realtime chat
       if (realtimeChatRef.current) {
@@ -378,7 +417,17 @@ export default function Call() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Conversation
-              {isSpeaking && (
+              {isRinging && (
+                <Badge variant="secondary" className="ml-auto">
+                  Ringing...
+                </Badge>
+              )}
+              {isOnHold && (
+                <Badge variant="secondary" className="ml-auto">
+                  On Hold
+                </Badge>
+              )}
+              {isSpeaking && !isOnHold && !isRinging && (
                 <Badge variant="secondary" className="ml-auto">
                   AI Speaking
                 </Badge>
