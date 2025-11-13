@@ -23,6 +23,7 @@
 | **[04-design-system-and-ux-principles.md](./docs/04-design-system-and-ux-principles.md)** | "Cyber Luxury" design system | Building UI components, ensuring consistency |
 | **[05-page-inventory-and-routing.md](./docs/05-page-inventory-and-routing.md)** | All 87 pages with routes and priorities | Planning sprints, implementing routes |
 | **[06-prompting-and-agent-guidelines.md](./docs/06-prompting-and-agent-guidelines.md)** | AI agent behavior and prompting best practices | Configuring conversation flows, AI prompts |
+| **[07-data-model-reference.md](./docs/07-data-model-reference.md)** | Database schema and TypeScript types | Implementing queries, understanding data relationships |
 
 ### Golden Rules
 
@@ -169,6 +170,157 @@ npm run dev
 - **Vercel** - Hosting and edge network
 
 **Target COGS:** $0.031/minute (80% cheaper than OpenAI Realtime API)
+
+---
+
+## 🎨 Design System & Component Library
+
+### Quick Start
+
+```bash
+# View the complete design system showcase
+npm run dev
+# Visit http://localhost:8080/dev/design-system
+```
+
+### "Cyber Luxury" Design Tokens
+
+**Color Palette:**
+```css
+--background: 0 0% 0%;           /* Space Black #000000 */
+--primary: 189 100% 42%;         /* Matrix Blue #00D4FF */
+--secondary: 157 100% 50%;       /* Cyber Green #00FF88 */
+--accent: 262 80% 60%;           /* Electric Purple #8B5CF6 */
+--destructive: 330 100% 50%;     /* Neon Pink #FF0080 */
+--card: 0 0% 10%;                /* Carbon Gray #1A1A1A */
+--muted: 0 0% 17%;               /* Steel #2D2D2D */
+--foreground: 0 0% 90%;          /* Silver #E5E5E5 */
+```
+
+**Typography:**
+- Primary: Inter (sans-serif)
+- Monospace: JetBrains Mono
+
+**Special Effects:**
+- `.cyber-grid` - Animated grid background (SpaceX inspired)
+- `.glow-blue` / `.glow-green` / `.glow-purple` - Holographic glow effects
+- `.glass` - Glass morphism with backdrop blur
+- `.holographic-text` - Animated gradient text effect
+- `.border-pulse` - Pulsing border animation
+
+### AppShell Layout
+
+**All authenticated pages MUST use the AppShell component:**
+
+```tsx
+import { AppShell } from '@/components/layout/AppShell';
+
+export default function DashboardPage() {
+  return (
+    <AppShell>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Your Page Title</h1>
+        {/* Your page content */}
+      </div>
+    </AppShell>
+  );
+}
+```
+
+**Features:**
+- Collapsible sidebar with primary navigation (Dashboard, Campaigns, Flows, Knowledge, Leads, Team, Settings)
+- Top bar with account switcher, notifications, help, and user menu
+- Mission Control inspired layout (SpaceX aesthetic)
+- Fully responsive - sidebar collapses to icons on mobile
+
+### Core UI Components
+
+**Location:** `src/components/ui/`
+
+#### MetricCard (Dashboard KPIs)
+```tsx
+import { MetricCard } from '@/components/ui/metric-card';
+import { Phone } from 'lucide-react';
+
+<MetricCard
+  label="Active Calls"
+  value="24"
+  icon={<Phone className="h-5 w-5" />}
+  trend={{ value: 12, isPositive: true }}
+  status="success"
+/>
+```
+
+#### Buttons
+```tsx
+import { Button } from '@/components/ui/button';
+
+<Button>Default</Button>
+<Button variant="secondary">Secondary</Button>
+<Button variant="outline">Outline</Button>
+<Button variant="ghost">Ghost</Button>
+<Button className="glow-blue">With Glow Effect</Button>
+```
+
+#### Cards
+```tsx
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+
+<Card className="glow-green">
+  <CardHeader>
+    <CardTitle>Your Card Title</CardTitle>
+  </CardHeader>
+  <CardContent>
+    Card content here
+  </CardContent>
+</Card>
+```
+
+#### Other Components
+- **Badge** - Status indicators
+- **Input** / **Textarea** - Form inputs
+- **Switch** - Toggle switches
+- **Tabs** - Tab navigation
+- **Table** - Data tables
+- **Dialog** / **Sheet** - Modals and side panels
+
+**See `/dev/design-system` for complete component showcase with examples**
+
+---
+
+## 🗄️ Database Schema
+
+**Multi-tenant Postgres with Row Level Security (RLS)**
+
+### Core Tables
+- `accounts` - Tenant root entities (workspaces)
+- `users` - User profiles linked to auth.users
+- `account_memberships` - User-to-account relationships with roles (owner/admin/member/agent)
+- `campaigns` - Voice AI campaigns
+- `flows` - Node-based conversation logic graphs
+- `knowledge_sources` & `knowledge_documents` - RAG knowledge base
+- `call_sessions` & `call_transcripts` - Voice call data and transcripts
+- `leads` - Captured contact information with qualification scores
+- `handoff_requests` - AI → human escalation queue
+- `integrations` - External service configurations
+- `audit_logs` - Security and compliance tracking
+
+### TypeScript Types
+
+```typescript
+import { Campaign, Lead, CallSession } from '@/types/db';
+import { supabase } from '@/integrations/supabase/client';
+
+// RLS automatically filters by user's account
+const { data: campaigns } = await supabase
+  .from('campaigns')
+  .select('*')
+  .eq('status', 'active');
+```
+
+**Full schema documentation:** `docs/07-data-model-reference.md`
+
+---
 
 ## How can I deploy this project?
 
