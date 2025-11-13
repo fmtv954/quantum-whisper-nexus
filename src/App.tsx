@@ -16,6 +16,7 @@ import CampaignNew from "./pages/CampaignNew";
 import CampaignDetail from "./pages/CampaignDetail";
 import Leads from "./pages/Leads";
 import LeadDetail from "./pages/LeadDetail";
+import Call from "./pages/Call";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -109,6 +110,9 @@ const App = () => (
             </ProtectedRoute>
           }
         />
+        
+        {/* Public call interface - accessible via campaign link */}
+        <Route path="/call/:campaignId" element={<Call />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
