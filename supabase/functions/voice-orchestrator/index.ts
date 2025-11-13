@@ -199,32 +199,87 @@ async function transcribeAudio(audioData: string): Promise<string> {
   return transcript;
 }
 
+async function searchWeb(query: string): Promise<string> {
+  const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
+  if (!TAVILY_API_KEY) {
+    console.warn('[Search] TAVILY_API_KEY not configured, skipping search');
+    return '';
+  }
+
+  try {
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: 'basic',
+        max_results: 3,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[Search] Tavily API failed:', response.status);
+      return '';
+    }
+
+    const result = await response.json();
+    const searchResults = result.results || [];
+    
+    if (searchResults.length === 0) return '';
+
+    // Format search results
+    const formattedResults = searchResults
+      .map((r: any) => `- ${r.title}: ${r.content}`)
+      .join('\n');
+
+    return `Search Results:\n${formattedResults}`;
+  } catch (error) {
+    console.error('[Search] Error:', error);
+    return '';
+  }
+}
+
 async function processWithAI(userMessage: string, context: ConversationContext): Promise<string> {
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY not configured');
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    throw new Error('LOVABLE_API_KEY not configured');
   }
 
   // Add user message to history
   context.history.push({ role: 'user', content: userMessage });
 
-  // Build system prompt
-  const systemPrompt = buildSystemPrompt(context);
+  // Detect if search is needed (simple keyword detection)
+  const searchKeywords = ['search', 'find', 'look up', 'what is', 'who is', 'when', 'where', 'how'];
+  const needsSearch = searchKeywords.some(keyword => 
+    userMessage.toLowerCase().includes(keyword)
+  );
 
-  // Call OpenAI GPT-4-mini
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Perform search if needed
+  let searchContext = '';
+  if (needsSearch) {
+    console.log('[RAG] Performing web search for:', userMessage);
+    searchContext = await searchWeb(userMessage);
+  }
+
+  // Build system prompt with RAG context
+  const systemPrompt = buildSystemPrompt(context, searchContext);
+
+  // Call Lovable AI (Gemini)
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'google/gemini-2.5-flash',
       messages: [
         { role: 'system', content: systemPrompt },
         ...context.history.slice(-10), // Keep last 10 messages for context
       ],
-      temperature: 0.7,
       max_tokens: 150,
     }),
   });
@@ -232,7 +287,7 @@ async function processWithAI(userMessage: string, context: ConversationContext):
   if (!response.ok) {
     const error = await response.text();
     console.error('[LLM Error]', error);
-    throw new Error(`OpenAI API failed: ${response.status}`);
+    throw new Error(`Lovable AI failed: ${response.status}`);
   }
 
   const result = await response.json();
@@ -271,8 +326,8 @@ async function synthesizeSpeech(text: string): Promise<string> {
   return base64Audio;
 }
 
-function buildSystemPrompt(context: ConversationContext): string {
-  return `You are a helpful AI assistant for a voice-based conversation.
+function buildSystemPrompt(context: ConversationContext, searchContext?: string): string {
+  let prompt = `You are a helpful AI assistant for a voice-based conversation.
 
 Campaign ID: ${context.campaignId}
 
@@ -283,6 +338,12 @@ Your goal is to:
 4. Be friendly, professional, and helpful
 
 Keep your responses conversational and brief.`;
+
+  if (searchContext) {
+    prompt += `\n\nContext from web search:\n${searchContext}\n\nUse this information to provide accurate, up-to-date answers.`;
+  }
+
+  return prompt;
 }
 
 async function trackUsage(callId: string, usage: {
@@ -296,12 +357,12 @@ async function trackUsage(callId: string, usage: {
   console.log(`[Usage] Call ${callId} - STT: ${usage.sttDuration}s, LLM: ${usage.llmTokens} tokens, TTS: ${usage.ttsCharacters} chars`);
 
   // Calculate costs
-  const sttCost = usage.sttDuration * (0.0077 / 60); // $0.0077/min
-  const llmCost = (usage.llmTokens / 1000000) * 0.15; // $0.15/1M tokens
-  const ttsCost = (usage.ttsCharacters / 1000) * 0.018; // $0.018/1k chars
+  const sttCost = usage.sttDuration * (0.0077 / 60); // Deepgram: $0.0077/min
+  const llmCost = (usage.llmTokens / 1000000) * 0.075; // Gemini 2.5 Flash: ~$0.075/1M tokens (via Lovable AI)
+  const ttsCost = (usage.ttsCharacters / 1000) * 0.018; // Deepgram: $0.018/1k chars
   const totalCost = sttCost + llmCost + ttsCost;
 
-  console.log(`[Cost] STT: $${sttCost.toFixed(6)}, LLM: $${llmCost.toFixed(6)}, TTS: $${ttsCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
+  console.log(`[Cost] STT: $${sttCost.toFixed(6)}, LLM (Gemini): $${llmCost.toFixed(6)}, TTS: $${ttsCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
 
   // TODO: Record to database in Phase 2
 }
