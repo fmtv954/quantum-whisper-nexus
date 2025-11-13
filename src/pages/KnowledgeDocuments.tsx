@@ -66,7 +66,7 @@ export default function KnowledgeDocuments() {
 
   function updateFilter(key: string, value: string) {
     const newParams = new URLSearchParams(searchParams);
-    if (value) {
+    if (value && value !== "all") {
       newParams.set(key, value);
     } else {
       newParams.delete(key);
@@ -117,12 +117,12 @@ export default function KnowledgeDocuments() {
       <Card className="p-4">
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <Select value={selectedSourceId} onValueChange={(value) => updateFilter("sourceId", value)}>
+            <Select value={selectedSourceId || "all"} onValueChange={(value) => updateFilter("sourceId", value)}>
               <SelectTrigger>
                 <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All sources</SelectItem>
+                <SelectItem value="all">All sources</SelectItem>
                 {sources.map((source) => (
                   <SelectItem key={source.id} value={source.id}>
                     {source.name}
@@ -132,12 +132,12 @@ export default function KnowledgeDocuments() {
             </Select>
           </div>
           <div className="flex-1">
-            <Select value={selectedStatus} onValueChange={(value) => updateFilter("status", value)}>
+            <Select value={selectedStatus || "all"} onValueChange={(value) => updateFilter("status", value)}>
               <SelectTrigger>
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="indexed">Indexed</SelectItem>
                 <SelectItem value="error">Error</SelectItem>
