@@ -1,0 +1,326 @@
+V2 Document 1.3: Quick Start Implementation Guide
+V2 Document 1.3: Quick Start Implementation Guide
+
+CONTEXT
+
+Following the System Introduction & Value Proposition, users need immediate actionable steps to experience the platform's value. This guide bridges the gap between vision and execution.
+
+OBJECTIVE
+
+Enable a new user to set up and test a complete voice AI campaign in under 10 minutes, demonstrating immediate value.
+
+STYLE
+
+Step-by-step tutorial with clear commands, verification steps, and visual cues. Minimal theory, maximum action.
+
+TONE
+
+Encouraging, practical, and results-focused. Emphasize quick wins and immediate feedback.
+
+AUDIENCE
+
+Technical founders, developers, and marketing teams setting up their first campaign.
+
+RESPONSE FORMAT
+
+Markdown with numbered steps, code blocks, verification checklists, and troubleshooting tips.
+
+CONSTRAINTS
+
+· Must be achievable in 10 minutes or less
+· Must work with our actual tech stack (Next.js 14, Supabase, LiveKit, etc.)
+· Must demonstrate core value proposition (lead capture, cost savings)
+· Must include immediate verification of success
+
+FEW-SHOT EXAMPLES
+
+Reference: Tech stack specifications, API documentation, and platform architecture from previous documents.
+
+TASK
+
+Generate a 10-minute implementation guide with these phases:
+
+1. Environment Setup (2 minutes)
+2. First Campaign Creation (3 minutes)
+3. Voice Flow Configuration (3 minutes)
+4. Test & Verification (2 minutes)
+5. Next Steps
+
+VERIFICATION CHECKPOINT
+
+User should complete a real voice call that captures contact information and creates a lead in the dashboard.
+
+ROLLBACK INSTRUCTIONS
+
+Each step includes "If this fails" alternatives and reset procedures.
+
+COMMON ERRORS & FIXES
+
+· Environment variable issues → Validation checklist
+· Audio permissions → Browser configuration steps
+· API rate limits → Fallback testing methods
+
+NEXT STEP PREPARATION
+
+After this guide, users will be ready for Document 2.1: System Architecture Deep Dive.
+
+---
+
+Quantum Voice AI - 10-Minute Quick Start Guide
+
+🚀 Get Your First Voice AI Campaign Live in 10 Minutes
+
+Prerequisites Checklist
+
+· Node.js 18.x or higher
+· Supabase account (free tier)
+· Deepgram account (free credits)
+· OpenAI API key
+
+---
+
+⏱️ Phase 1: Environment Setup (2 minutes)
+
+1.1 Clone and Configure
+
+```bash
+# Clone the starter template
+git clone github.com/quantum-voice/starter-template.git
+cd quantum-voice-starter
+
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env.local
+```
+
+1.2 Configure Environment Variables
+
+```bash
+# .env.local
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# AI Services
+DEEPGRAM_API_KEY=your_deepgram_key
+OPENAI_API_KEY=your_openai_key
+LIVEKIT_API_KEY=your_livekit_key
+LIVEKIT_API_SECRET=your_livekit_secret
+
+# Google Gemini (optional for Phase 1)
+GOOGLE_API_KEY=your_gemini_key
+```
+
+Verification: Run npm run dev and check for "Environment variables loaded successfully"
+
+---
+
+⏱️ Phase 2: First Campaign Creation (3 minutes)
+
+2.1 Database Setup
+
+```sql
+-- Run in Supabase SQL Editor
+INSERT INTO campaigns (
+  name, 
+  description, 
+  status, 
+  created_at
+) VALUES (
+  'First Test Campaign',
+  'My initial voice AI campaign',
+  'active',
+  NOW()
+) RETURNING id;
+```
+
+Save the returned campaign ID - you'll need it for the next steps.
+
+2.2 Basic Campaign Configuration
+
+```typescript
+// In your campaign settings
+const campaignConfig = {
+  name: "First Test Campaign",
+  voice: "aura-2", // Deepgram Aura voice
+  speakingRate: 1.0,
+  maxCallDuration: 360, // 6 minutes
+  handoffTrigger: "time_or_complexity"
+};
+```
+
+Verification: Campaign appears in /campaigns list with "Active" status.
+
+---
+
+⏱️ Phase 3: Voice Flow Configuration (3 minutes)
+
+3.1 Simple Conversation Flow
+
+Navigate to /flows/designer/[your-campaign-id]
+
+Configure these 3 essential nodes:
+
+Start Node:
+
+```yaml
+Greeting: "Hello! Thanks for calling. I'm here to help answer your questions and connect you with the right person."
+Tone: Friendly and professional
+Voice: aura-2
+```
+
+Lead Gate Node:
+
+```yaml
+Contact Capture:
+  - "May I get your email address to follow up with more information?"
+  - "What's the best phone number to reach you?"
+Validation: Basic email format check
+```
+
+End Node:
+
+```yaml
+Closing: "Thanks for your time! Someone from our team will contact you shortly."
+Next Steps: "Look for an email from us within the next 10 minutes."
+```
+
+3.2 Knowledge Base (Quick Setup)
+
+```bash
+# Upload a simple FAQ document
+echo "Q: What are your business hours?
+A: We're available 24/7 through this voice AI service.
+
+Q: How quickly will someone contact me?
+A: We promise a callback within 10 minutes for urgent inquiries.
+
+Q: What services do you offer?
+A: We provide [your services here]." > knowledge-base.txt
+```
+
+Upload via /knowledge/upload interface.
+
+---
+
+⏱️ Phase 4: Test & Verification (2 minutes)
+
+4.1 Generate Test QR Code
+
+Navigate to /campaigns/[id]/qr-codes
+
+Generate QR code with default settings and scan with your phone.
+
+4.2 Complete Test Call
+
+1. Scan QR code with your phone
+2. Enter test email: test@yourcompany.com
+3. Wait for 2 rings and AI to answer
+4. Have a 1-minute conversation:
+   · "Hi, I'm interested in your services"
+   · Provide test contact information
+   · Ask a simple question from your knowledge base
+
+4.3 Verify Success
+
+Check three confirmation points:
+
+Dashboard (/dashboard):
+
+· Active call shows in real-time panel
+· Lead appears in recent leads table
+
+Leads Page (/leads):
+
+· Test lead with contact information captured
+· Conversation transcript available
+
+Cost Monitoring (/dashboard/cost-monitoring):
+
+· Call cost shows ~$0.03-0.05 (1-minute call)
+
+---
+
+✅ Success Checklist
+
+· Environment configured without errors
+· Campaign created and active
+· Basic conversation flow configured
+· QR code generated and scannable
+· Test call completed successfully
+· Lead captured in dashboard
+· Cost under $0.05 for test call
+
+---
+
+🚨 Troubleshooting Common Issues
+
+"Environment Variables Not Loading"
+
+```bash
+# Verify .env.local format
+cat .env.local
+# Should show key=value pairs without spaces around =
+```
+
+"QR Code Not Triggering Call"
+
+· Check campaign status is "active"
+· Verify LiveKit service is running
+· Test with different QR scanner app
+
+"No Audio in Call"
+
+· Ensure browser microphone permissions granted
+· Check Deepgram API key validity
+· Test with headphones (sometimes speaker issues)
+
+"Lead Not Appearing in Dashboard"
+
+· Check Supabase connection
+· Verify RLS policies aren't blocking inserts
+· Check browser console for API errors
+
+---
+
+🎯 What You've Accomplished
+
+In under 10 minutes, you've:
+
+· ✅ Deployed a working voice AI system
+· ✅ Created your first conversational campaign
+· ✅ Captured a real lead through voice interface
+· ✅ Demonstrated 80% cost savings vs alternatives
+· ✅ Validated the core value proposition
+
+---
+
+📈 Next Steps
+
+Immediate Actions:
+
+1. Share your QR code with team members for testing
+2. Review conversation transcript to see AI performance
+3. Explore flow designer to customize conversation paths
+
+Ready for Deep Dive?
+Proceed to Document 2.1: System Architecture Deep Dive to understand the technical foundations powering your new voice AI platform.
+
+Need More Configuration?
+
+· Document 3.1: Voice AI Pipeline Architecture
+· Document 4.1: Leads Management API
+· Document 6.1: Asana Integration Guide
+
+---
+
+This quick start demonstrates our core promise: enterprise-grade voice AI that's accessible and immediately valuable for businesses of all sizes.
+
+Time to complete: Target 10 minutes | Actual time: _____ minutes
+Successfully captured test lead: ☐ Yes ☐ No
+
+---
+
+Generated following CO-STAR framework with reference to actual tech stack capabilities and user experience goals.

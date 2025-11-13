@@ -1,0 +1,360 @@
+CORE APPLICATION PAGES
+
+1. Authentication & Onboarding
+
+· /login - Email/password + social auth
+· /signup - Account creation with plan selection
+· /forgot-password - Password reset flow
+· /verify-email - Email confirmation
+· /onboarding/welcome - Post-signup setup wizard
+· /onboarding/campaign-setup - First campaign creation
+
+2. Dashboard & Analytics
+
+· /dashboard - Main overview with key metrics
+  · Active calls, leads today, conversion rate, cost tracking
+  · Quick campaign creation, recent leads, system health
+· /dashboard/analytics - Detailed analytics dashboard
+  · Call volume trends, lead conversion funnel, cost per lead
+  · Campaign performance comparison, ROI calculations
+· /dashboard/performance - Performance metrics
+  · AI accuracy scores, call duration analytics, handoff rates
+· /dashboard/cost-monitoring - Real-time cost tracking
+  · Usage by service, budget alerts, cost optimization tips
+
+3. Campaign Management
+
+· /campaigns - Campaign list view
+  · Status, performance metrics, quick actions
+  · Filter by status, date, performance
+· /campaigns/new - Campaign creation wizard
+  · Basic info, target audience, integration setup
+· /campaigns/[id] - Campaign detail & settings
+  · Overview tab, settings, performance snapshot
+· /campaigns/[id]/analytics - Campaign-specific analytics
+  · Detailed metrics, conversion tracking, A/B testing results
+· /campaigns/[id]/widget - Widget customization
+  · Color scheme, positioning, trigger settings
+· /campaigns/[id]/qr-codes - QR code management
+  · Generate, download, track QR code performance
+
+4. AI Agent Configuration ⭐ CORE FLOW PAGES
+
+· /flows - Flow templates library
+  · Pre-built templates (real estate, sales, support)
+  · Community templates, recently used
+· /flows/designer/[campaignId] - MAIN AGENT CONFIGURATION
+  · Visual Node Editor (drag & drop interface)
+  · Node Types: Start, Lead Gate, RAG Answer, Clarify, Dispatch, End
+  · Agent Personality Settings: Tone, voice, speaking style
+  · Greeting Configuration: Initial prompt, welcome message
+  · Q&A Knowledge Base: Connect RAG sources, manual Q&A pairs
+  · Lead Qualification: Questions, scoring logic, contact capture
+  · Handoff Triggers: Time-based, complexity, user request
+  · Testing Panel: Real-time flow testing, simulation mode
+· /flows/templates/[templateId] - Template details & customization
+· /flows/[id]/test - Standalone flow testing interface
+· /flows/[id]/version - Version history and rollback
+
+5. Knowledge Base Management
+
+· /knowledge - Knowledge base overview
+  · Source performance, search analytics, gap analysis
+· /knowledge/documents - Document library
+  · PDF, DOCX, TXT upload with automatic processing
+  · Document status (processing, active, error)
+  · Search and filter documents
+· /knowledge/upload - Bulk upload interface
+  · Drag & drop, URL import, text paste
+· /knowledge/sources - Web source management
+  · Website URLs, sitemap imports, RSS feeds
+· /knowledge/analytics - Knowledge performance
+  · Most used sources, unanswered questions, confidence scores
+· /knowledge/qna - Manual Q&A management
+  · Add/edit questions and answers, organize by category
+
+6. Leads Management
+
+· /leads - Leads table with advanced filtering
+  · Sort by date, score, status, campaign
+  · Bulk actions, export, assign to team
+· /leads/[id] - Lead detail page
+  · Full conversation transcript, collected data
+  · Lead score, qualification status, next steps
+  · Activity timeline, follow-up tasks
+· /leads/import - Bulk lead import
+  · CSV upload, mapping, validation
+· /leads/export - Export leads
+  · Filter selection, format options, scheduling
+· /leads/qualification - Lead scoring settings
+  · Score criteria, weighting, automation rules
+
+7. Team & Collaboration
+
+· /team - Team member management
+  · Invite team members, role assignment, activity
+· /team/roles - Role permissions
+  · Custom roles, permission templates, access levels
+· /settings/account - Account settings
+  · Company info, branding, default settings
+· /settings/billing - Billing & subscription
+  · Plan details, usage metrics, payment methods, invoices
+· /settings/integrations - Integration configuration
+  · Asana, Slack, CRM connections, webhooks
+· /settings/security - Security settings
+  · 2FA, session management, audit logs
+
+🎙️ VOICE AI SPECIFIC PAGES
+
+8. Call Interface & Experience
+
+· /call/[campaignId] - Main call interface for users
+  · Voice AI interface with real-time transcript
+  · Audio visualizer, call controls, information display
+· /call/ringing/[ticketId] - Ringing/loading state
+  · Professional ringing animation, wait time estimation
+· /call/ended - Call completion page
+  · Thank you message, next steps, follow-up options
+· /call/error - Error handling
+  · Friendly error messages, troubleshooting tips
+· /call/consent/[email] - Consent validation
+  · Email verification, privacy policy, terms acceptance
+
+9. Voice Settings & Configuration
+
+· /voice/settings - Voice AI configuration
+  · TTS voice selection (Aura-1, Aura-2)
+  · Speaking rate, pitch, emotion settings
+  · Audio quality preferences
+· /voice/preview - Voice preview tool
+  · Test different voices with custom text
+  · Compare voice options side-by-side
+
+🤝 HUMAN HANDOFF SYSTEM
+
+10. Agent Workspace
+
+· /agent/dashboard - Agent overview
+  · Pending handoffs, active calls, performance metrics
+· /agent/calls - Call queue management
+  · Prioritized handoff queue, filter by urgency/skill
+· /agent/handoff/[handoffId] - Handoff acceptance interface
+  · Live call interface with customer context
+  · Transcript history, lead information, knowledge base access
+  · Call controls, disposition options, CRM integration
+· /agent/availability - Availability management
+  · Status setting, working hours, skill tags
+· /agent/performance - Personal analytics
+  · Handoff metrics, resolution rates, customer satisfaction
+
+11. Handoff Administration
+
+· /handoff/rules - Handoff rule engine
+  · Automatic routing rules, skill-based assignment
+  · Escalation protocols, business hours configuration
+· /handoff/queue - Global queue view
+  · All pending handoffs, assignment history, SLA monitoring
+· /handoff/analytics - Handoff performance
+  · Wait time analytics, first-contact resolution, agent performance
+
+⚙️ ADMINISTRATION & SYSTEM
+
+12. System Administration
+
+· /admin/dashboard - System overview (super admin)
+  · System health, user activity, billing overview
+· /admin/users - User management
+  · All users across organization, account management
+· /admin/billing - Billing administration
+  · Organization billing, usage reports, invoice management
+· /admin/analytics - System-wide analytics
+  · Platform usage, feature adoption, performance trends
+· /admin/health - System health monitoring
+  · Service status, performance metrics, error rates
+
+13. Developer & API
+
+· /developer/api - API documentation
+  · Interactive API docs, authentication guide, rate limits
+· /developer/webhooks - Webhook configuration
+  · Event subscriptions, payload customization, testing
+· /developer/sandbox - API testing sandbox
+  · Live API testing, code examples, SDK documentation
+· /developer/logs - API request logs
+  · Request history, error tracking, performance analysis
+
+🛠️ TOOLS & TESTING
+
+14. Testing & Quality Assurance
+
+· /tools/call-simulator - Call simulation tool
+  · Test conversations without real calls, scenario testing
+· /tools/audio-test - Audio quality testing
+  · Microphone testing, speaker test, latency measurement
+· /tools/flow-test - Flow testing interface
+  · Step-through testing, debug mode, variable inspection
+· /tools/diagnostics - Real-time system diagnostics
+  · Connection status, service health, performance metrics
+
+15. Analytics & Reporting
+
+· /analytics/calls - Call analytics deep dive
+  · Call recording playback, sentiment analysis, topic clustering
+· /analytics/leads - Lead conversion analytics
+  · Conversion funnel, lead source analysis, ROI calculation
+· /analytics/cost - Cost analysis and optimization
+  · Cost by service, efficiency metrics, optimization suggestions
+· /analytics/export - Data export tools
+  · Custom reports, scheduled exports, data visualization
+
+📱 EMBEDDABLE COMPONENTS
+
+16. Widget & Integration
+
+· /embed/widget/[campaignId] - Widget embed generator
+  · Embed code, customization options, installation guide
+· /embed/qr/[campaignId] - QR code generator
+  · Style customization, tracking parameters, bulk generation
+· /embed/preview - Widget preview tool
+  · Real-time preview, mobile/desktop testing, A/B testing
+· /embed/settings - Widget behavior settings
+  · Trigger conditions, display rules, targeting options
+
+🔧 DEVELOPMENT & DEBUGGING
+
+17. Development Tools
+
+· /dev/component-library - UI component library
+  · All components with props, examples, and usage
+· /dev/design-system - Design system documentation
+  · Design tokens, spacing, typography, color usage
+· /dev/debug - Debugging tools
+  · State inspection, event logs, performance profiling
+· /dev/performance - Performance monitoring
+  · Bundle analysis, load times, optimization suggestions
+
+📊 REAL-TIME MONITORING
+
+18. Live Monitoring
+
+· /monitor/live-calls - Real-time call monitoring
+  · Active calls map, call details, real-time transcripts
+· /monitor/system-status - System status dashboard
+  · Service status, uptime metrics, incident history
+· /monitor/alerts - Alert management
+  · Alert rules, notification settings, alert history
+· /monitor/performance - Live performance metrics
+  · Real-time dashboards, key metrics, anomaly detection
+
+🔐 SECURITY & COMPLIANCE
+
+19. Security Center
+
+· /security/audit - Security audit log
+  · User actions, data access, security events
+· /security/compliance - Compliance documentation
+  · GDPR, CCPA, SOC2 compliance status and controls
+· /security/consent - Consent management
+  · Consent records, privacy settings, data processing agreements
+· /security/data - Data management
+  · Data export, deletion requests, retention policies
+
+🎓 ONBOARDING & EDUCATION
+
+20. Education & Support
+
+· /learn/getting-started - Getting started guide
+  · Step-by-step tutorials, video guides, best practices
+· /learn/tutorials - Video tutorials
+  · Feature walkthroughs, use case examples, advanced tips
+· /learn/best-practices - Implementation best practices
+  · Industry-specific guides, optimization tips, success metrics
+· /learn/faq - Frequently asked questions
+  · Searchable FAQ, common issues, troubleshooting
+
+📄 STATIC & LEGAL PAGES
+
+21. Legal & Compliance
+
+· /privacy - Privacy policy
+· /terms - Terms of service
+· /gdpr - GDPR compliance information
+· /security-practices - Security practices documentation
+· /accessibility - Accessibility statement
+
+🚀 API ROUTES STRUCTURE
+
+```
+/app/api/
+├── auth/[...nextauth]/route.ts
+├── campaigns/
+│   ├── route.ts (GET, POST)
+│   ├── [id]/route.ts (GET, PUT, DELETE)
+│   ├── [id]/analytics/route.ts
+│   └── [id]/widget/route.ts
+├── calls/
+│   ├── start/route.ts
+│   ├── end/route.ts
+│   ├── [id]/transcript/route.ts
+│   └── [id]/handoff/route.ts
+├── leads/
+│   ├── route.ts
+│   ├── [id]/route.ts
+│   ├── import/route.ts
+│   └── export/route.ts
+├── knowledge/
+│   ├── documents/route.ts
+│   ├── search/route.ts
+│   ├── upload/route.ts
+│   └── qna/route.ts
+├── flows/
+│   ├── route.ts
+│   ├── [id]/route.ts
+│   ├── [id]/test/route.ts
+│   └── templates/route.ts
+├── handoff/
+│   ├── request/route.ts
+│   ├── accept/route.ts
+│   ├── queue/route.ts
+│   └── rules/route.ts
+├── voice/
+│   ├── settings/route.ts
+│   ├── tts/route.ts
+│   └── stt/route.ts
+├── analytics/
+│   ├── dashboard/route.ts
+│   └── export/route.ts
+├── billing/
+│   ├── subscription/route.ts
+│   └── invoice/route.ts
+├── admin/
+│   ├── users/route.ts
+│   └── system/route.ts
+└── tools/
+    ├── simulate/route.ts
+    └── diagnostics/route.ts
+```
+
+🎯 PRIORITY BUILD ORDER
+
+Phase 1 (MVP Core)
+
+1. /login, /signup, /dashboard
+2. /campaigns, /campaigns/new, /campaigns/[id]
+3. /flows/designer/[campaignId] ⭐ MAIN AI CONFIG
+4. /call/[campaignId] - Voice interface
+5. /leads, /leads/[id]
+
+Phase 2 (Essential Features)
+
+1. /knowledge/documents, /knowledge/upload
+2. /voice/settings
+3. /agent/handoff/[handoffId]
+4. /dashboard/analytics
+5. /settings/integrations
+
+Phase 3 (Advanced Features)
+
+1. All remaining pages from above list
+
+This master list provides 87 unique pages covering every aspect of the Quantum Voice AI SaaS platform, with detailed descriptions of what each page contains and its specific features.

@@ -1,0 +1,299 @@
+V2  12 Foundation Documents
+
+DOCUMENT 1: System Introduction & Value Proposition
+
+CONTEXT: New team members need rapid onboarding; investors need clear value proposition
+OBJECTIVE: Provide comprehensive system overview and business case
+STYLE: Professional, concise, business-technical hybrid
+TONE: Confident, innovative, solution-focused
+AUDIENCE: Developers, stakeholders, investors, new team members
+RESPONSE FORMAT: Markdown with clear sections and bullet points
+
+TASK:
+
+· Executive summary of platform
+· Core value proposition vs alternatives
+· Target market segments with use cases
+· Economic advantages (cost savings, conversion rates)
+· Technical innovation highlights
+· Business impact metrics
+
+VERIFICATION: Should enable anyone to understand platform value in <5 minutes
+ROLLBACK: N/A - foundational document
+NEXT STEP: Document 2 - Tech Stack Specification
+
+---
+
+DOCUMENT 2: Tech Stack Specification
+
+CONTEXT: Development team needs clear technology standards and architecture
+OBJECTIVE: Define complete technology stack with implementation details
+STYLE: Technical specification with code examples
+TONE: Precise, authoritative, implementation-focused
+AUDIENCE: Senior developers, architects, DevOps
+RESPONSE FORMAT: Markdown with code blocks and architecture diagrams
+
+TASK:
+
+· Complete stack breakdown by layer (frontend, backend, AI, infra)
+· Version control and package management
+· Development environment setup
+· API service configurations
+· Database schema and relationships
+· Deployment architecture
+
+VERIFICATION: Developer should be able to set up local environment from this doc
+ROLLBACK: Version-pinned dependencies with fallback plans
+NEXT STEP: Document 3 - Core Architecture
+
+---
+
+📄 DOCUMENT 3: Core System Architecture
+
+CONTEXT: Complex distributed system requires clear architectural patterns
+OBJECTIVE: Document system components, data flows, and integration points
+STYLE: Architecture documentation with sequence diagrams
+TONE: Technical, comprehensive, pattern-oriented
+AUDIENCE: System architects, senior engineers, technical leads
+RESPONSE FORMAT: Markdown with Mermaid.js diagrams and flowcharts
+
+TASK:
+
+· System component diagram and responsibilities
+· Data flow architecture (voice, text, leads)
+· Real-time communication patterns
+· State management strategies
+· Error handling architecture
+· Scaling considerations per component
+
+VERIFICATION: Should answer "how does data flow through the system?"
+ROLLBACK: Component isolation and graceful degradation patterns
+NEXT STEP: Document 4 - Voice AI Pipeline
+
+---
+
+📄 DOCUMENT 4: Voice AI Pipeline Architecture
+
+CONTEXT: Complex AI pipeline with multiple service integrations
+OBJECTIVE: Document end-to-end voice processing with cost optimization
+STYLE: Technical deep dive with performance metrics
+TONE: Analytical, performance-focused, cost-aware
+AUDIENCE: AI engineers, backend developers, DevOps
+RESPONSE FORMAT: Markdown with sequence diagrams and cost tables
+
+TASK:
+
+· LiveKit WebRTC integration details
+· Deepgram STT/TTS configuration and optimization
+· GPT-4-mini conversation logic with fallback strategies
+· RAG pipeline with Gemini File Search
+· Cost-per-minute calculations and optimizations
+· Latency targets and performance benchmarks
+
+VERIFICATION: Should enable reproduction of voice pipeline with same performance
+ROLLBACK: Fallback service configuration and circuit breakers
+NEXT STEP: Document 5 - Conversation Flow Engine
+
+---
+
+📄 DOCUMENT 5: Conversation Flow Engine
+
+CONTEXT: Node-based flow designer requires clear state management
+OBJECTIVE: Document conversation state machine and flow logic
+STYLE: State machine documentation with node specifications
+TONE: Precise, logical, user-experience focused
+AUDIENCE: Conversation designers, full-stack developers
+RESPONSE FORMAT: Markdown with state diagrams and node specifications
+
+TASK:
+
+· 6-node conversation flow specification (Start → Lead Gate → RAG Answer → Clarify → Dispatch → End)
+· State transition logic and conditions
+· Variable management and persistence
+· Lead qualification criteria and scoring
+· Handoff triggers and conditions
+· Consent ticket system implementation
+
+VERIFICATION: Should enable recreation of conversation flows from specification
+ROLLBACK: Conversation state recovery and restart procedures
+NEXT STEP: Document 6 - API Specifications
+
+---
+
+📄 DOCUMENT 6: API Specifications
+
+CONTEXT: Multiple API endpoints require consistent documentation
+OBJECTIVE: Provide complete API reference with examples
+STYLE: API documentation with OpenAPI-like structure
+TONE: Technical, precise, example-driven
+AUDIENCE: Frontend developers, integration partners
+RESPONSE FORMAT: Markdown with TypeScript interfaces and curl examples
+
+TASK:
+
+· Leads Management API (CRUD, search, filtering)
+· Handoff System API (request/accept workflows)
+· Knowledge Base API (upload, search, management)
+· Campaign API (creation, configuration, analytics)
+· Authentication and rate limiting
+· Error handling and status codes
+
+VERIFICATION: Developer should be able to integrate with APIs using only this doc
+ROLLBACK: API versioning and backward compatibility
+NEXT STEP: Document 7 - Admin Dashboard
+
+---
+
+📄 DOCUMENT 7: Admin Dashboard Specification
+
+CONTEXT: Real-time admin interface with multiple data views
+OBJECTIVE: Document dashboard components, data flows, and real-time updates
+STYLE: UI/UX specification with component breakdowns
+TONE: User-centric, data-focused, actionable
+AUDIENCE: Frontend developers, product managers, designers
+RESPONSE FORMAT: Markdown with component specs and data flow diagrams
+
+TASK:
+
+· Real-time diagnostics panel implementation
+· Leads table with sort/filter/search
+· Campaign performance analytics
+· Cost monitoring and alerts
+· Real-time Supabase subscriptions
+· Data visualization components and libraries
+
+VERIFICATION: Should enable frontend team to build dashboard from specs
+ROLLBACK: Data loading states and error boundaries
+NEXT STEP: Document 8 - Design System
+
+---
+
+📄 DOCUMENT 8: Design System & UI Components
+
+CONTEXT: Consistent UI/UX across multiple interfaces required
+OBJECTIVE: Define design tokens, components, and interaction patterns
+STYLE: Design system documentation with code examples
+TONE: Consistent, accessible, developer-friendly
+AUDIENCE: UI/UX designers, frontend developers
+RESPONSE FORMAT: Markdown with design tokens and component examples
+
+TASK:
+
+· Design tokens (colors, typography, spacing, animations)
+· Component library specifications (Button, Card, Table, etc.)
+· Accessibility requirements and ARIA patterns
+· Responsive design breakpoints and behaviors
+· Dark/light theme implementation
+· Icon system and asset management
+
+VERIFICATION: Should enable consistent UI implementation across team
+ROLLBACK: Component variant fallbacks and error states
+NEXT STEP: Document 9 - Deployment Guide
+
+---
+
+📄 DOCUMENT 9: Production Deployment Guide
+
+CONTEXT: Multi-environment deployment with zero-downtime requirements
+OBJECTIVE: Document complete deployment process and infrastructure
+STYLE: Step-by-step deployment manual with verification steps
+TONE: Precise, reliable, operations-focused
+AUDIENCE: DevOps engineers, senior developers
+RESPONSE FORMAT: Markdown with command examples and checklists
+
+TASK:
+
+· Vercel deployment configuration
+· Environment variables management
+· Database migrations and seeding
+· SSL/TLS configuration
+· Monitoring and alerting setup
+· Zero-downtime deployment procedures
+
+VERIFICATION: Success criteria for each deployment step
+ROLLBACK: Automated rollback procedures and health checks
+NEXT STEP: Document 10 - Security Architecture
+
+---
+
+📄 DOCUMENT 10: Security Architecture & Best Practices
+
+CONTEXT: Handling sensitive customer data and voice conversations
+OBJECTIVE: Document security measures, compliance, and data protection
+STYLE: Security policy documentation with implementation details
+TONE: Security-first, compliant, risk-aware
+AUDIENCE: Security team, all developers, compliance officers
+RESPONSE FORMAT: Markdown with security controls and audit procedures
+
+TASK:
+
+· Authentication and authorization flows
+· Data encryption at rest and in transit
+· GDPR compliance and consent management
+· API security and rate limiting
+· Audit logging and monitoring
+· Vulnerability management procedures
+
+VERIFICATION: Security audit checklist and compliance verification
+ROLLBACK: Security incident response procedures
+NEXT STEP: Document 11 - Troubleshooting Guide
+
+---
+
+📄 DOCUMENT 11: Comprehensive Troubleshooting Guide
+
+CONTEXT: Complex system with multiple failure points
+OBJECTIVE: Provide systematic debugging procedures for common issues
+STYLE: Troubleshooting manual with flowcharts and solutions
+TONE: Practical, systematic, user-support focused
+AUDIENCE: Support team, developers, system administrators
+RESPONSE FORMAT: Markdown with diagnostic flowcharts and solution tables
+
+TASK:
+
+· Quick diagnosis flowchart for common issues
+· Error code reference with resolutions
+· Performance bottleneck identification
+· Log analysis procedures
+· Customer support scripts
+· Escalation procedures
+
+VERIFICATION: Support team should resolve 80% of issues using this guide
+ROLLBACK: Known workarounds and temporary fixes
+NEXT STEP: Document 12 - Risk Assessment
+
+---
+
+📄 DOCUMENT 12: Risk Assessment & Mitigation Plan
+
+CONTEXT: Production system with business-critical dependencies
+OBJECTIVE: Identify and mitigate technical and business risks
+STYLE: Risk management document with prioritization matrix
+TONE: Analytical, proactive, business-aware
+AUDIENCE: Technical leads, product managers, executives
+RESPONSE FORMAT: Markdown with risk matrices and action plans
+
+TASK:
+
+· P0 Critical risks (system downtime, data loss)
+· P1 High risks (performance degradation, cost overruns)
+· P2 Medium risks (technical debt, scaling limitations)
+· Mitigation strategies and ownership
+· Monitoring and alerting for risk triggers
+· Business continuity planning
+
+VERIFICATION: Risk register with clear mitigation status
+ROLLBACK: Business continuity procedures
+NEXT STEP: Implementation phase begins
+
+---
+
+🎯 USAGE INSTRUCTIONS
+
+1. Copy these 12 CO-STAR templates into a secure document
+2. Use as foundation when starting new chat sessions
+3. Reference by document number when requesting specific implementations
+4. Maintain consistency across all development phases
+5. Update templates as system evolves through development
+
+These 12 documents provide complete coverage of the Quantum Voice AI platform and will ensure consistent development even across different chat sessions.

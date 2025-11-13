@@ -1,0 +1,1016 @@
+V2 Document 5.2 Admin Dashboard Specification
+
+CONTEXT
+
+Following the Leads Management API, we need to design and implement the admin dashboard that provides real-time analytics, lead management, and system monitoring for business users.
+
+OBJECTIVE
+
+Create comprehensive specifications for an admin dashboard that delivers real-time insights, intuitive lead management, and performance monitoring with a SpaceX-inspired cyber aesthetic.
+
+STYLE
+
+UI/UX specification with component breakdowns, data flow diagrams, and interactive prototypes. Focus on real-time updates and actionable insights.
+
+TONE
+
+User-centric, data-focused, and actionable. Emphasize the "mission control" experience for voice AI operations.
+
+AUDIENCE
+
+Frontend developers, UI/UX designers, product managers, and business stakeholders.
+
+RESPONSE FORMAT
+
+Markdown with component specifications, data flow diagrams, and interactive design patterns.
+
+CONSTRAINTS
+
+· Must provide real-time updates via Supabase subscriptions
+· Must handle 10,000+ leads with performant filtering
+· Must maintain SpaceX cyber aesthetic while being user-friendly
+· Must work on desktop and mobile
+
+FEW-SHOT EXAMPLES
+
+Reference: Tech stack specifications, leads management API, and design system requirements.
+
+TASK
+
+Generate comprehensive dashboard specifications covering:
+
+1. Dashboard Layout & Navigation
+2. Real-Time Analytics Components
+3. Lead Management Interface
+4. Campaign Performance Views
+5. Cost Monitoring & Optimization
+6. Mobile Responsive Design
+
+VERIFICATION CHECKPOINT
+
+Dashboard should update leads in real-time (<2s latency) and handle 10,000+ records without performance degradation.
+
+ROLLBACK INSTRUCTIONS
+
+Document progressive enhancement strategies for slower devices.
+
+COMMON ERRORS & FIXES
+
+· Real-time update storms → Debounced subscriptions
+· Large dataset performance → Virtual scrolling and pagination
+· Complex filtering → Optimized database queries
+
+NEXT STEP PREPARATION
+
+This enables frontend implementation and integration with Document 4.1 APIs.
+
+---
+
+Quantum Voice AI - Admin Dashboard Specification
+
+1. Dashboard Layout & Navigation
+
+1.1 Main Layout Structure
+
+```typescript
+// Layout configuration
+interface DashboardLayout {
+  header: DashboardHeader;
+  sidebar: NavigationSidebar;
+  main: DashboardMain;
+  footer: StatusFooter;
+}
+
+interface DashboardHeader {
+  logo: {
+    text: 'Quantum Voice AI',
+    glow: 'matrix-blue',
+    animation: 'pulse-glow'
+  };
+  userMenu: {
+    avatar: UserAvatar,
+    notifications: RealTimeNotificationBadge,
+    quickActions: [Settings, Help, Logout]
+  };
+  statusIndicator: {
+    system: 'online' | 'degraded' | 'offline',
+    calls: ActiveCallCount,
+    lastUpdate: Timestamp
+  };
+}
+
+interface NavigationSidebar {
+  sections: [
+    {
+      title: 'Overview',
+      items: ['Dashboard', 'Real-time Monitor']
+    },
+    {
+      title: 'Campaigns', 
+      items: ['All Campaigns', 'Create New', 'Templates']
+    },
+    {
+      title: 'Leads',
+      items: ['Lead Inbox', 'Qualified Leads', 'Analytics']
+    },
+    {
+      title: 'Knowledge',
+      items: ['Documents', 'Q&A', 'Search Analytics']
+    },
+    {
+      title: 'Team',
+      items: ['Agents', 'Performance', 'Settings']
+    }
+  ];
+  collapsed: boolean;
+  activeItem: string;
+}
+```
+
+1.2 Responsive Breakpoints
+
+```css
+/* Tailwind breakpoints for dashboard */
+@screen sm {  /* 640px+ - Mobile optimized */
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .mobile-menu { display: block; }
+}
+
+@screen md {  /* 768px+ - Tablet */
+  .dashboard-grid { grid-template-columns: 280px 1fr; }
+  .sidebar { display: block; }
+}
+
+@screen lg {  /* 1024px+ - Desktop */
+  .dashboard-grid { grid-template-columns: 320px 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@screen xl {  /* 1280px+ - Large desktop */
+  .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+  .main-content { grid-template-columns: 2fr 1fr; }
+}
+```
+
+---
+
+2. Real-Time Analytics Components
+
+2.1 Main Dashboard Overview
+
+```typescript
+// Dashboard metrics configuration
+interface DashboardMetrics {
+  primaryMetrics: PrimaryMetricCard[];
+  realTimeCharts: RealTimeChart[];
+  recentActivity: ActivityFeed;
+  systemHealth: HealthStatus;
+}
+
+interface PrimaryMetricCard {
+  title: string;
+  value: number | string;
+  trend: {
+    direction: 'up' | 'down' | 'neutral';
+    value: number;
+    period: '24h' | '7d' | '30d';
+  };
+  icon: LucideIcon;
+  color: 'matrix-blue' | 'cyber-green' | 'electric-purple' | 'neon-pink';
+  glow: boolean;
+  onClick?: () => void;
+}
+
+// Example metrics configuration
+const primaryMetrics: PrimaryMetricCard[] = [
+  {
+    title: 'Active Calls',
+    value: 24,
+    trend: { direction: 'up', value: 12, period: '24h' },
+    icon: PhoneIcon,
+    color: 'matrix-blue',
+    glow: true
+  },
+  {
+    title: 'Leads Today',
+    value: 156,
+    trend: { direction: 'up', value: 8, period: '24h' },
+    icon: UsersIcon,
+    color: 'cyber-green',
+    glow: false
+  },
+  {
+    title: 'Conversion Rate',
+    value: '14.2%',
+    trend: { direction: 'up', value: 2.1, period: '7d' },
+    icon: TrendingUpIcon,
+    color: 'electric-purple',
+    glow: false
+  },
+  {
+    title: 'Cost/Minute',
+    value: '$0.028',
+    trend: { direction: 'down', value: 0.004, period: '30d' },
+    icon: DollarSignIcon,
+    color: 'neon-pink',
+    glow: false
+  }
+];
+```
+
+2.2 Real-Time Charts Component
+
+```typescript
+// Real-time charts specification
+interface RealTimeChart {
+  type: 'line' | 'bar' | 'area' | 'pie';
+  title: string;
+  data: ChartData[];
+  updateFrequency: number; // milliseconds
+  timeRange: '1h' | '24h' | '7d' | '30d';
+  colorScheme: 'quantum' | 'mono' | 'alert';
+}
+
+const dashboardCharts: RealTimeChart[] = [
+  {
+    type: 'line',
+    title: 'Call Volume - Last 24 Hours',
+    data: [], // Populated via Supabase subscription
+    updateFrequency: 30000, // 30 seconds
+    timeRange: '24h',
+    colorScheme: 'quantum'
+  },
+  {
+    type: 'bar',
+    title: 'Lead Conversion by Campaign',
+    data: [],
+    updateFrequency: 60000, // 1 minute
+    timeRange: '7d',
+    colorScheme: 'quantum'
+  },
+  {
+    type: 'area',
+    title: 'Cost vs Revenue',
+    data: [],
+    updateFrequency: 120000, // 2 minutes
+    timeRange: '30d',
+    colorScheme: 'quantum'
+  },
+  {
+    type: 'pie',
+    title: 'Lead Status Distribution',
+    data: [],
+    updateFrequency: 30000,
+    timeRange: '24h',
+    colorScheme: 'quantum'
+  }
+];
+```
+
+2.3 Real-Time Implementation
+
+```typescript
+// hooks/useDashboardMetrics.ts
+export function useDashboardMetrics() {
+  const [metrics, setMetrics] = useState<DashboardMetrics>(initialMetrics);
+  const supabase = useSupabaseClient();
+
+  useEffect(() => {
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('dashboard-metrics')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leads'
+        },
+        (payload) => {
+          // Debounced updates to prevent storm
+          debouncedUpdateMetrics(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversations'
+        },
+        (payload) => {
+          debouncedUpdateMetrics(payload);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const debouncedUpdateMetrics = useCallback(
+    debounce((payload: any) => {
+      setMetrics(current => updateMetricsWithPayload(current, payload));
+    }, 1000), // 1 second debounce
+    []
+  );
+
+  return metrics;
+}
+```
+
+---
+
+3. Lead Management Interface
+
+3.1 Leads Table Component
+
+```typescript
+// Leads table specification
+interface LeadsTable {
+  columns: TableColumn[];
+  data: Lead[];
+  pagination: PaginationConfig;
+  sorting: SortingConfig;
+  filtering: FilterConfig;
+  selection: SelectionConfig;
+  actions: TableAction[];
+}
+
+interface TableColumn {
+  key: string;
+  label: string;
+  sortable: boolean;
+  filterable: boolean;
+  width?: string;
+  render?: (value: any, row: Lead) => ReactNode;
+}
+
+const leadColumns: TableColumn[] = [
+  {
+    key: 'select',
+    label: '',
+    sortable: false,
+    filterable: false,
+    width: '40px',
+    render: (_, row) => <SelectionCheckbox lead={row} />
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    sortable: true,
+    filterable: true,
+    width: '100px',
+    render: (value, row) => <StatusBadge status={value} lead={row} />
+  },
+  {
+    key: 'full_name',
+    label: 'Contact',
+    sortable: true,
+    filterable: true,
+    width: '200px',
+    render: (value, row) => <ContactCell lead={row} />
+  },
+  {
+    key: 'qualification_score',
+    label: 'Score',
+    sortable: true,
+    filterable: true,
+    width: '100px',
+    render: (value) => <QualificationScore score={value} />
+  },
+  {
+    key: 'urgency_level',
+    label: 'Urgency',
+    sortable: true,
+    filterable: true,
+    width: '100px',
+    render: (value) => <UrgencyIndicator level={value} />
+  },
+  {
+    key: 'created_at',
+    label: 'Received',
+    sortable: true,
+    filterable: true,
+    width: '150px',
+    render: (value) => <TimeAgo timestamp={value} />
+  },
+  {
+    key: 'campaign_id',
+    label: 'Campaign',
+    sortable: true,
+    filterable: true,
+    width: '150px',
+    render: (value) => <CampaignBadge campaignId={value} />
+  },
+  {
+    key: 'actions',
+    label: 'Actions',
+    sortable: false,
+    filterable: false,
+    width: '120px',
+    render: (_, row) => <LeadActions lead={row} />
+  }
+];
+```
+
+3.2 Advanced Filtering System
+
+```typescript
+// Filter configuration
+interface FilterConfig {
+  filters: Filter[];
+  combinations: FilterCombination[];
+  presets: FilterPreset[];
+}
+
+interface Filter {
+  id: string;
+  type: 'text' | 'select' | 'multiselect' | 'date' | 'number' | 'boolean';
+  field: string;
+  label: string;
+  options?: FilterOption[];
+  operators: FilterOperator[];
+}
+
+const leadFilters: Filter[] = [
+  {
+    id: 'status',
+    type: 'multiselect',
+    field: 'status',
+    label: 'Status',
+    options: [
+      { value: 'new', label: 'New', count: 0 },
+      { value: 'contacted', label: 'Contacted', count: 0 },
+      { value: 'qualified', label: 'Qualified', count: 0 },
+      { value: 'converted', label: 'Converted', count: 0 },
+      { value: 'disqualified', label: 'Disqualified', count: 0 }
+    ],
+    operators: ['includes', 'excludes']
+  },
+  {
+    id: 'qualification_score',
+    type: 'number',
+    field: 'qualification_score',
+    label: 'Qualification Score',
+    operators: ['greater_than', 'less_than', 'equals', 'between'],
+  },
+  {
+    id: 'urgency_level',
+    type: 'select',
+    field: 'urgency_level',
+    label: 'Urgency Level',
+    options: [
+      { value: 'critical', label: 'Critical' },
+      { value: 'high', label: 'High' },
+      { value: 'standard', label: 'Standard' },
+      { value: 'low', label: 'Low' }
+    ],
+    operators: ['equals']
+  },
+  {
+    id: 'created_at',
+    type: 'date',
+    field: 'created_at',
+    label: 'Received Date',
+    operators: ['after', 'before', 'on', 'between']
+  },
+  {
+    id: 'campaign_id',
+    type: 'select',
+    field: 'campaign_id',
+    label: 'Campaign',
+    options: [], // Dynamically loaded from campaigns
+    operators: ['equals']
+  },
+  {
+    id: 'has_phone',
+    type: 'boolean',
+    field: 'phone',
+    label: 'Has Phone Number',
+    operators: ['is_true', 'is_false']
+  }
+];
+```
+
+3.3 Bulk Actions System
+
+```typescript
+// Bulk actions specification
+interface BulkAction {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  action: (leads: Lead[]) => Promise<void>;
+  confirmation?: {
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+  };
+  enabled: (leads: Lead[]) => boolean;
+}
+
+const bulkActions: BulkAction[] = [
+  {
+    id: 'assign_agent',
+    label: 'Assign to Agent',
+    icon: UserPlusIcon,
+    action: async (leads) => {
+      const agentId = await selectAgentDialog();
+      await assignLeadsToAgent(leads, agentId);
+    },
+    enabled: (leads) => leads.length > 0
+  },
+  {
+    id: 'update_status',
+    label: 'Update Status',
+    icon: EditIcon,
+    action: async (leads) => {
+      const status = await selectStatusDialog();
+      await updateLeadsStatus(leads, status);
+    },
+    enabled: (leads) => leads.length > 0
+  },
+  {
+    id: 'export_csv',
+    label: 'Export to CSV',
+    icon: DownloadIcon,
+    action: async (leads) => {
+      const csv = generateCSV(leads);
+      downloadCSV(csv, `leads-export-${Date.now()}.csv`);
+    },
+    enabled: (leads) => leads.length > 0
+  },
+  {
+    id: 'create_asana_tasks',
+    label: 'Create Asana Tasks',
+    icon: PlusIcon,
+    action: async (leads) => {
+      await createAsanaTasksForLeads(leads);
+    },
+    enabled: (leads) => leads.length > 0 && leads.every(lead => !lead.asana_task_id)
+  },
+  {
+    id: 'send_email',
+    label: 'Send Email',
+    icon: MailIcon,
+    action: async (leads) => {
+      const template = await selectEmailTemplate();
+      await sendBulkEmail(leads, template);
+    },
+    enabled: (leads) => leads.length > 0
+  }
+];
+```
+
+---
+
+4. Campaign Performance Views
+
+4.1 Campaign Analytics Dashboard
+
+```typescript
+// Campaign performance metrics
+interface CampaignMetrics {
+  overview: CampaignOverview;
+  performance: PerformanceMetrics;
+  costAnalysis: CostMetrics;
+  leadQuality: LeadQualityMetrics;
+  timeline: PerformanceTimeline;
+}
+
+interface CampaignOverview {
+  id: string;
+  name: string;
+  status: 'active' | 'paused' | 'draft' | 'archived';
+  totalCalls: number;
+  totalLeads: number;
+  conversionRate: number;
+  costPerLead: number;
+  totalCost: number;
+  roi: number;
+}
+
+interface PerformanceMetrics {
+  calls: {
+    total: number;
+    answered: number;
+    missed: number;
+    averageDuration: number;
+  };
+  leads: {
+    total: number;
+    qualified: number;
+    converted: number;
+    averageScore: number;
+  };
+  cost: {
+    total: number;
+    perMinute: number;
+    perLead: number;
+    perConversion: number;
+  };
+}
+
+// Campaign comparison view
+interface CampaignComparison {
+  campaigns: CampaignMetrics[];
+  comparisonMetrics: ComparisonMetric[];
+  timeRange: '7d' | '30d' | '90d';
+  groupBy: 'day' | 'week' | 'month';
+}
+```
+
+4.2 Performance Visualization Components
+
+```typescript
+// Performance chart components
+const campaignCharts = {
+  conversionFunnel: {
+    type: 'funnel',
+    title: 'Conversion Funnel',
+    data: [
+      { stage: 'Calls', value: 1000, color: '#00D4FF' },
+      { stage: 'Answered', value: 750, color: '#00FF88' },
+      { stage: 'Leads', value: 150, color: '#8B5CF6' },
+      { stage: 'Qualified', value: 75, color: '#FF0080' },
+      { stage: 'Converted', value: 25, color: '#FFAA00' }
+    ],
+    animation: true
+  },
+
+  costEfficiency: {
+    type: 'scatter',
+    title: 'Cost vs Conversion Rate',
+    data: [], // Campaign points
+    xAxis: { field: 'costPerLead', label: 'Cost per Lead' },
+    yAxis: { field: 'conversionRate', label: 'Conversion Rate' },
+    size: { field: 'totalLeads', label: 'Total Leads' }
+  },
+
+  timelinePerformance: {
+    type: 'composed',
+    title: 'Performance Timeline',
+    data: [], // Time series data
+    lines: [
+      { field: 'calls', label: 'Calls', color: '#00D4FF' },
+      { field: 'leads', label: 'Leads', color: '#00FF88' },
+      { field: 'conversions', label: 'Conversions', color: '#8B5CF6' }
+    ],
+    bars: [
+      { field: 'cost', label: 'Cost', color: '#FF0080' }
+    ]
+  }
+};
+```
+
+---
+
+5. Cost Monitoring & Optimization
+
+5.1 Real-Time Cost Dashboard
+
+```typescript
+// Cost monitoring components
+interface CostDashboard {
+  overview: CostOverview;
+  breakdown: CostBreakdown;
+  trends: CostTrends;
+  alerts: CostAlerts;
+  recommendations: OptimizationRecommendations;
+}
+
+interface CostOverview {
+  totalSpend: number;
+  spendToday: number;
+  projectedMonthly: number;
+  budgetUtilization: number;
+  costPerLead: number;
+  costPerMinute: number;
+}
+
+interface CostBreakdown {
+  byService: ServiceCost[];
+  byCampaign: CampaignCost[];
+  byTime: TimeCost[];
+}
+
+interface ServiceCost {
+  service: 'deepgram_stt' | 'deepgram_tts' | 'openai' | 'livekit' | 'gemini' | 'tavily';
+  cost: number;
+  percentage: number;
+  usage: number;
+  efficiency: number;
+}
+
+// Cost alert system
+interface CostAlert {
+  id: string;
+  type: 'budget' | 'anomaly' | 'efficiency';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  message: string;
+  triggeredAt: Date;
+  resolved: boolean;
+  action?: AlertAction;
+}
+
+const costAlerts: CostAlert[] = [
+  {
+    id: 'budget_80_percent',
+    type: 'budget',
+    severity: 'medium',
+    title: 'Budget Utilization at 80%',
+    message: 'Monthly budget is 80% utilized. Consider increasing budget or optimizing usage.',
+    triggeredAt: new Date(),
+    resolved: false,
+    action: {
+      label: 'Adjust Budget',
+      handler: () => openBudgetSettings()
+    }
+  },
+  {
+    id: 'high_tts_cost',
+    type: 'efficiency',
+    severity: 'high',
+    title: 'High TTS Cost Detected',
+    message: 'TTS costs are 40% above average. Consider optimizing response lengths.',
+    triggeredAt: new Date(),
+    resolved: false,
+    action: {
+      label: 'View Optimization',
+      handler: () => openTTSSettings()
+    }
+  }
+];
+```
+
+5.2 Optimization Recommendations
+
+```typescript
+// AI-powered cost optimization
+interface OptimizationRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  impact: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high';
+  estimatedSavings: number;
+  category: 'ai' | 'infrastructure' | 'workflow';
+  action: RecommendationAction;
+}
+
+const optimizationRecommendations: OptimizationRecommendation[] = [
+  {
+    id: 'reduce_tts_usage',
+    title: 'Optimize TTS Response Length',
+    description: 'AI responses are 25% longer than industry average. Implementing response length limits could save ~$120/month.',
+    impact: 'medium',
+    effort: 'low',
+    estimatedSavings: 120,
+    category: 'ai',
+    action: {
+      label: 'Configure Limits',
+      handler: () => openResponseSettings()
+    }
+  },
+  {
+    id: 'model_downgrade',
+    title: 'Downgrade Simple Queries',
+    description: '45% of queries are simple and could use GPT-4-mini instead of standard model. Potential savings: ~$85/month.',
+    impact: 'high',
+    effort: 'medium',
+    estimatedSavings: 85,
+    category: 'ai',
+    action: {
+      label: 'Setup Model Routing',
+      handler: () => openModelSettings()
+    }
+  },
+  {
+    id: 'cache_rag_responses',
+    title: 'Implement RAG Response Caching',
+    description: 'Frequently asked questions could be cached to reduce Gemini API calls. Estimated savings: ~$65/month.',
+    impact: 'medium',
+    effort: 'high',
+    estimatedSavings: 65,
+    category: 'infrastructure',
+    action: {
+      label: 'Setup Caching',
+      handler: () => openCacheSettings()
+    }
+  }
+];
+```
+
+---
+
+6. Mobile Responsive Design
+
+6.1 Mobile-First Components
+
+```typescript
+// Mobile-optimized components
+interface MobileDashboard {
+  layout: 'stacked' | 'tabbed';
+  priorityMetrics: PrimaryMetricCard[];
+  simplifiedNavigation: MobileNavItem[];
+  touchOptimized: TouchOptimizations;
+  offlineSupport: OfflineCapabilities;
+}
+
+const mobileLayout: MobileDashboard = {
+  layout: 'tabbed',
+  priorityMetrics: [
+    // Only show 2-3 most important metrics on mobile
+    primaryMetrics[0], // Active Calls
+    primaryMetrics[1], // Leads Today
+    primaryMetrics[2]  // Conversion Rate
+  ],
+  simplifiedNavigation: [
+    { icon: HomeIcon, label: 'Dashboard', route: '/dashboard' },
+    { icon: PhoneIcon, label: 'Calls', route: '/calls' },
+    { icon: UsersIcon, label: 'Leads', route: '/leads' },
+    { icon: BarChartIcon, label: 'Analytics', route: '/analytics' },
+    { icon: SettingsIcon, label: 'More', route: '/more' }
+  ],
+  touchOptimized: {
+    buttonSize: '44px',
+    touchTargets: 'adequate',
+    gestureSupport: ['swipe', 'pull-to-refresh']
+  },
+  offlineSupport: {
+    cachedData: ['recentLeads', 'campaigns', 'userSettings'],
+    syncStrategy: 'optimistic'
+  }
+};
+```
+
+6.2 Progressive Enhancement Strategy
+
+```typescript
+// Performance optimization for various devices
+interface PerformanceOptimization {
+  deviceTiers: DeviceTier[];
+  loadingStrategies: LoadingStrategy[];
+  dataLimits: DataLimits;
+}
+
+const performanceConfig: PerformanceOptimization = {
+  deviceTiers: [
+    {
+      name: 'high-end',
+      criteria: { ram: '>4GB', connection: '4G+/WiFi' },
+      features: ['real-time', 'high-data', 'animations']
+    },
+    {
+      name: 'mid-range',
+      criteria: { ram: '2-4GB', connection: '4G' },
+      features: ['real-time', 'medium-data', 'reduced-animations']
+    },
+    {
+      name: 'low-end',
+      criteria: { ram: '<2GB', connection: '3G' },
+      features: ['polling', 'low-data', 'no-animations']
+    }
+  ],
+  loadingStrategies: [
+    {
+      tier: 'high-end',
+      strategy: {
+        initialLoad: 'full',
+        updates: 'real-time',
+        caching: 'aggressive'
+      }
+    },
+    {
+      tier: 'mid-range',
+      strategy: {
+        initialLoad: 'partial',
+        updates: 'debounced-real-time',
+        caching: 'moderate'
+      }
+    },
+    {
+      tier: 'low-end',
+      strategy: {
+        initialLoad: 'minimal',
+        updates: 'polling-30s',
+        caching: 'conservative'
+      }
+    }
+  ],
+  dataLimits: {
+    highEnd: { leadsPerPage: 100, chartPoints: 1000 },
+    midRange: { leadsPerPage: 50, chartPoints: 500 },
+    lowEnd: { leadsPerPage: 25, chartPoints: 250 }
+  }
+};
+```
+
+---
+
+7. Implementation Timeline & Priorities
+
+7.1 Development Phases
+
+```typescript
+// Phase-based implementation
+const implementationPhases = {
+  phase1: {
+    name: 'Core Dashboard',
+    duration: '2 weeks',
+    components: [
+      'Dashboard layout',
+      'Basic metrics cards',
+      'Leads table (basic)',
+      'Mobile responsive'
+    ],
+    dependencies: ['Leads Management API']
+  },
+  phase2: {
+    name: 'Advanced Features',
+    duration: '3 weeks',
+    components: [
+      'Real-time subscriptions',
+      'Advanced filtering',
+      'Bulk actions',
+      'Campaign analytics'
+    ],
+    dependencies: ['Phase 1']
+  },
+  phase3: {
+    name: 'Optimization',
+    duration: '2 weeks',
+    components: [
+      'Cost monitoring',
+      'Performance optimization',
+      'Offline support',
+      'Progressive enhancement'
+    ],
+    dependencies: ['Phase 2']
+  }
+};
+```
+
+7.2 Success Metrics
+
+```typescript
+// Dashboard performance targets
+const successMetrics = {
+  performance: {
+    pageLoad: '<3 seconds',
+    realTimeUpdate: '<2 seconds',
+    mobilePerformance: '>80 Lighthouse score',
+    tableRender: '<1 second for 10,000 records'
+  },
+  usability: {
+    userSatisfaction: '>4.5/5 rating',
+    taskCompletion: '>90% success rate',
+    mobileUsage: '>30% of total usage'
+  },
+  business: {
+    leadResponseTime: '<10 minutes',
+    userAdoption: '>80% active usage',
+    costSavings: '>15% through optimizations'
+  }
+};
+```
+
+---
+
+🎯 Verification Summary
+
+✅ Real-Time Performance: Supabase subscriptions with <2s update latency
+✅ Scalability: Virtual scrolling and pagination for 10,000+ leads
+✅ Mobile Optimized: Responsive design with touch-optimized interfaces
+✅ User Experience: SpaceX-inspired cyber aesthetic with intuitive workflows
+✅ Performance: Progressive enhancement for various device capabilities
+
+Technical Specifications:
+
+· Framework: Next.js 14 with App Router
+· Styling: Tailwind CSS with custom cyber theme
+· State Management: React Query + Zustand
+· Real-time: Supabase subscriptions
+· Charts: Recharts with custom themes
+· Tables: TanStack Table for performance
+
+---
+
+📚 Next Steps
+
+Proceed to Frontend Implementation using the specified components and patterns.
+
+Related Documents:
+
+· 5.1 Design System & UI Components (visual foundation)
+· 4.1 Leads Management API (data source)
+· 6.1 Asana Integration Guide (workflow integration)
+
+---
+
+Generated following CO-STAR framework with detailed component specifications and performance targets.

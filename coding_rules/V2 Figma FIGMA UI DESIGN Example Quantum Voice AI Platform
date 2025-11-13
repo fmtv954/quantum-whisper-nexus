@@ -1,0 +1,264 @@
+V2 Figma FIGMA UI DESIGN Example Quantum Voice AI Platform
+
+🎯 DESIGN MANDATE
+
+Create a comprehensive UI design system for a cutting-edge voice AI SaaS platform with Elon Musk/SpaceX-inspired cyber aesthetic combined with Google Cloud's usability and Amazon's conversion-focused design.
+
+---
+
+🌟 DESIGN SYSTEM REQUIREMENTS
+
+Core Aesthetic: "Cyber Luxury"
+
+```typescript
+DesignTokens {
+  primary_palette: {
+    space_black: '#000000',
+    matrix_blue: '#00D4FF',
+    cyber_green: '#00FF88',
+    electric_purple: '#8B5CF6',
+    neon_pink: '#FF0080',
+    carbon_gray: '#1A1A1A',
+    steel: '#2D2D2D',
+    silver: '#E5E5E5'
+  },
+  
+  typography: {
+    primary: 'Inter, sans-serif',
+    mono: 'JetBrains Mono, monospace',
+    weights: [300, 400, 500, 600, 700]
+  },
+  
+  effects: {
+    glow: '0 0 20px rgba(0, 212, 255, 0.3)',
+    hologram: '0 0 30px rgba(0, 255, 136, 0.2)',
+    grid_lines: 'repeating-linear-gradient(...)',
+    glass: 'backdrop-filter: blur(10px)'
+  }
+}
+```
+
+SpaceX-Inspired Principles
+
+· Minimalist Data Density: Like Falcon 9 control panel - only essential info
+· Status-First Design: Real-time system status always visible
+· Progressive Disclosure: Complex features revealed as needed
+· Mission Control Layout: Central workspace with peripheral controls
+
+---
+
+🏗️ PAGE-SPECIFIC DESIGN REQUIREMENTS
+
+1. Dashboard & Analytics
+
+```
+Layout: Mission Control Style
+- Central: Live call metrics (like rocket telemetry)
+- Left: Quick action panel (launch sequence style)
+- Right: System health indicators
+- Bottom: Recent activity stream
+
+Components:
+  ▸ Holographic metric cards with glowing borders
+  ▸ Real-time audio waveform visualizer
+  ▸ SpaceX-style status indicators (green/red/yellow)
+  ▸ Amazon-style conversion funnel visualization
+```
+
+2. AI Agent Configuration (/flows/designer/[campaignId])
+
+```
+Layout: Three-Panel Workspace (Like SpaceX Launch Control)
+┌─────────────────┬──────────────────┬─────────────────┐
+│   Node Library  │  Visual Flow     │   Properties    │
+│   (Left Panel)  │  Designer        │   Panel         │
+│                 │  (Center)        │   (Right)       │
+└─────────────────┴──────────────────┴─────────────────┘
+
+Features:
+  ▸ Drag & drop node system (6 node types)
+  ▸ Real-time flow testing panel
+  ▸ Voice preview with waveform
+  ▸ Amazon-style "Customers also use" suggestions
+```
+
+3. Call Interface (/call/[campaignId])
+
+```
+Design: Cyber Communication Terminal
+- Central: Real-time conversation transcript
+- Left: User info & lead qualification progress
+- Right: Knowledge base answers with confidence scores
+- Bottom: Minimal controls (mute, end, handoff)
+
+Aesthetic: 
+  ▸ Matrix-style falling code background (subtle)
+  ▸ Google Cloud-style clean typography
+  ▸ SpaceX mission-critical status indicators
+```
+
+4. Knowledge Base Management
+
+```
+Layout: Google Cloud Console Inspired
+- Left: Navigation tree (documents, URLs, Q&A)
+- Center: Content preview with AI processing status
+- Right: Search performance analytics
+
+Components:
+  ▸ Drag-drop upload zones with holographic effect
+  ▸ Processing status with SpaceX launch sequence style
+  ▸ Amazon-style recommendation engine for content gaps
+```
+
+---
+
+🎨 COMPONENT LIBRARY SPECIFICATION
+
+Navigation & Layout
+
+```typescript
+HeaderComponent {
+  logo: 'Quantum Voice AI' with matrix_blue glow,
+  navigation: 'Amazon-style mega menu',
+  user_menu: 'Google Cloud dropdown',
+  status_indicator: 'SpaceX-style system status light'
+}
+
+SidebarComponent {
+  background: 'carbon_gray with glass effect',
+  active_item: 'matrix_blue glow border',
+  icons: 'Outlined when inactive, filled when active'
+}
+```
+
+Data Visualization
+
+```typescript
+MetricCard {
+  background: 'carbon_gray with subtle grid',
+  border: '1px solid steel with matrix_blue glow on hover',
+  value: 'Large electric_purple typography',
+  trend: 'cyber_green up arrows, neon_pink down arrows'
+}
+
+AnalyticsChart {
+  theme: 'Dark with matrix_blue primary, cyber_green secondary',
+  grid: 'Subtle steel lines',
+  tooltips: 'Glass effect with glow'
+}
+```
+
+Forms & Inputs
+
+```typescript
+InputField {
+  default: 'carbon_gray background, silver text',
+  focus: 'matrix_blue glow border, cyber_green caret',
+  error: 'neon_pink glow and text'
+}
+
+ButtonSystem {
+  primary: 'matrix_blue gradient with glow',
+  secondary: 'steel with silver text, glow on hover',
+  danger: 'neon_pink gradient with pulse animation'
+}
+```
+
+---
+
+📱 SPECIFIC PAGE FLOWS
+
+Onboarding Experience (Amazon + Google Cloud inspired)
+
+```
+Step 1: Welcome (SpaceX-style hero with mission statement)
+Step 2: Campaign Setup (Google Cloud wizard style)
+Step 3: AI Agent Training (Interactive voice setup)
+Step 4: Integration Connect (Amazon 1-click style)
+Step 5: Launch (SpaceX countdown animation)
+```
+
+Voice Call Flow (Matrix + Google Duo)
+
+```
+1. Ringing: Pulsing holographic circle with matrix_blue glow
+2. Active Call: Central transcript with participant avatars
+3. AI Thinking: Pulsing cyber_green loader with processing text
+4. Handoff: Smooth SpaceX stage separation animation
+```
+
+Admin Dashboard (SpaceX Mission Control)
+
+```
+Left Panel: System telemetry (calls, cost, performance)
+Center: Real-time call map (like rocket trajectory)
+Right: Alert panel (mission-critical notifications)
+Bottom: Quick action console (launch new campaign, etc.)
+```
+
+---
+
+🚀 INTERACTION PATTERNS
+
+Micro-Interactions
+
+· Hover: Subtle matrix_blue glow
+· Loading: SpaceX-inspired sequential dot animation
+· Success: Cyber_green pulse with checkmark
+· Error: Neon_pink shake with alert icon
+· Transitions: Smooth SpaceX stage separation style
+
+Animation Principles
+
+```typescript
+AnimationSystem {
+  duration: '200-400ms for interactions',
+  easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  purpose: 'Functional, not decorative',
+  performance: '60fps minimum'
+}
+```
+
+---
+
+📐 DESIGN DELIVERABLES
+
+Required Artboards
+
+```
+1. Design System & Components
+2. Authentication Flows (Login, Signup, Onboarding)
+3. Dashboard & Analytics Suite
+4. AI Agent Configuration (Flow Designer)
+5. Knowledge Base Management
+6. Call Interface & Voice Experience
+7. Lead Management System
+8. Team & Settings Management
+9. Mobile Responsive Views
+10. Dark/Light Mode (if applicable)
+```
+
+Expected Output
+
+· Complete Figma file with all 87 pages from our master list
+· Component library with variants and states
+· Design tokens for consistent theming
+· Interaction prototypes for key user flows
+· Mobile adaptations for all major screens
+· Developer handoff specs with CSS variables
+
+---
+
+✅ SUCCESS CRITERIA
+
+1. SpaceX Vibe: Feels like mission control for voice AI
+2. Google Cloud Usability: Intuitive even for non-technical users
+3. Amazon Conversion: Clear paths to key actions
+4. Cyber Aesthetic: Futuristic but not overwhelming
+5. Performance Focus: Feels fast and responsive
+6. Accessibility: WCAG 2.1 AA compliant despite dark theme
+
+---
+
+FINAL INSTRUCTION: Create a comprehensive UI design that makes complex voice AI technology feel as simple and powerful as a SpaceX rocket launch, with the usability of Google Cloud and the conversion optimization of Amazon. Every pixel should communicate "cutting-edge enterprise AI" while remaining approachable for small business owners.

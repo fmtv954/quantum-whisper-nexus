@@ -1,0 +1,400 @@
+V2 Complete Tech Stack Outline
+
+CORE FRAMEWORK & RUNTIME
+
+Next.js 14 (App Router)
+
+· Purpose: Full-stack React framework with API routes
+· Docs: https://nextjs.org/docs
+· Key Features Used:
+  · App Router for routing
+  · API Routes for backend logic
+  · Server Components for performance
+  · Middleware for authentication
+· Version: 14.0.0+
+
+TypeScript
+
+· Purpose: Type safety and developer experience
+· Docs: https://www.typescriptlang.org/docs/
+· Key Features Used:
+  · Strict type checking
+  · Interface definitions for API contracts
+  · Type-safe database queries
+
+Node.js
+
+· Purpose: JavaScript runtime for API routes
+· Docs: https://nodejs.org/docs
+· Version: 18.x LTS
+
+---
+
+DATABASE & DATA LAYER
+
+Supabase (PostgreSQL)
+
+· Purpose: Primary database with real-time capabilities
+· Docs: https://supabase.com/docs
+· Key Services Used:
+  · PostgreSQL Database: https://supabase.com/docs/guides/database
+  · Row Level Security (RLS): https://supabase.com/docs/guides/auth/row-level-security
+  · Authentication: https://supabase.com/docs/guides/auth
+  · Storage: https://supabase.com/docs/guides/storage (for knowledge base files)
+  · Realtime: https://supabase.com/docs/guides/realtime (for admin dashboard updates)
+
+Redis
+
+· Purpose: Session management and caching
+· Docs: https://redis.io/docs/
+· Use Cases:
+  · Conversation state storage
+  · Rate limiting
+  · Temporary audio session data
+
+Database Extensions
+
+· UUID Generation: uuid-ossp
+· Encryption: pgcrypto for sensitive data
+· Full-Text Search: For transcript search in admin panel
+
+---
+
+AI & VOICE INFRASTRUCTURE (UPDATED)
+
+Speech-to-Text (STT)
+
+Deepgram Nova-3
+
+· Purpose: High-accuracy real-time speech recognition
+· Docs: https://developers.deepgram.com/docs
+· API Reference: https://developers.deepgram.com/reference/streaming
+· Cost: $0.0077/minute (streaming)
+· Features: Real-time streaming, punctuation, profanity filter
+
+Text-to-Speech (TTS)
+
+Deepgram Aura
+
+· Purpose: Natural voice synthesis
+· Docs: https://developers.deepgram.com/docs/tts
+· API Reference: https://developers.deepgram.com/reference/text-to-speech-api
+· Cost: $0.015-$0.03/1k characters
+· Voice Options: Aura-1 (female), Aura-2 (male)
+
+Large Language Model (LLM)
+
+GPT-4-mini (Primary)
+
+· Purpose: Conversation intelligence and reasoning
+· Docs: https://platform.openai.com/docs/models
+· API Reference: https://platform.openai.com/docs/api-reference/chat
+· Cost: ~$0.15/1M tokens input, $0.60/1M tokens output
+· Fallback: GPT-4.1-mini for complex queries
+
+Real-Time Audio Transport (NEW)
+
+LiveKit
+
+· Purpose: Scalable WebRTC audio handling
+· Docs: https://docs.livekit.io
+· API Reference: https://docs.livekit.io/reference/
+· Cost: $0.004-$0.005/participant-minute
+· Features: 10,000+ concurrent sessions, audio-only WebRTC, room recording
+
+Knowledge Base & RAG
+
+Google Gemini File Search API
+
+· Purpose: Document processing and semantic search
+· Docs: https://ai.google.dev/docs/file_search
+· API Reference: https://ai.google.dev/api
+· Features: PDF/DOCX/TXT processing, automatic embeddings, citation generation
+
+Tavily API (Fallback)
+
+· Purpose: Web search when RAG fails
+· Docs: https://tavily.com/docs
+· API Reference: https://tavily.com/docs/rest-api
+· Cost: $0.008/call
+· Use Case: Third-line failsafe search
+
+---
+
+INTEGRATIONS & SERVICES
+
+Asana API
+
+· Purpose: Callback task creation and management
+· Docs: https://developers.asana.com/docs
+· REST API Reference: https://developers.asana.com/reference/rest-api-reference
+· Key Endpoints Used:
+  · Create Task: POST /tasks
+  · Update Task: PUT /tasks/{task_gid}
+  · Project Management: GET /projects
+
+Resend (Optional)
+
+· Purpose: Email notifications and confirmations
+· Docs: https://resend.com/docs
+· API Reference: https://resend.com/docs/api-reference/introduction
+· Use Case: Email confirmations for high-value leads
+
+Slack Webhooks (Optional)
+
+· Purpose: Real-time lead notifications
+· Docs: https://api.slack.com/messaging/webhooks
+· Use Case: Instant lead alerts to sales teams
+
+---
+
+FRONTEND TECHNOLOGIES
+
+Tailwind CSS
+
+· Purpose: Utility-first CSS framework
+· Docs: https://tailwindcss.com/docs
+· Configuration: Custom design system based on SaaS requirements
+
+UI Components
+
+· shadcn/ui: https://ui.shadcn.com
+· Lucide Icons: https://lucide.dev/icons/
+· Framer Motion (optional): https://www.framer.com/motion/
+
+Web Audio API
+
+· Purpose: Ringtone playback and audio processing
+· Docs: https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
+· Key Features:
+  · MP3 ringtone playback (2 rings)
+  · Audio context management
+  · Volume monitoring for diagnostics
+
+---
+
+AUTHENTICATION & SECURITY
+
+Supabase Auth
+
+· Purpose: User authentication and session management
+· Docs: https://supabase.com/docs/guides/auth
+· Features Used:
+  · Email/password authentication
+  · JWT token management
+  · Session handling
+  · RLS policies
+
+JSON Web Tokens (JWT)
+
+· Purpose: Secure API authentication
+· Library: jsonwebtoken or built-in Supabase auth
+· Use Case: Secure callback task links
+
+---
+
+DEPLOYMENT & DEVOPS
+
+Vercel
+
+· Purpose: Production deployment and hosting
+· Docs: https://vercel.com/docs
+· Features Used:
+  · Automatic deployments from Git
+  · Environment variables management
+  · Serverless function optimization
+  · Edge network for global performance
+
+Environment Management
+
+· Vercel Environment Variables: https://vercel.com/docs/projects/environment-variables
+· Local Development: .env.local files
+
+---
+
+MONITORING & ANALYTICS
+
+Custom Analytics
+
+· Purpose: Call metrics and performance tracking
+· Implementation: Custom Supabase tables + real-time dashboard
+· Metrics Tracked:
+  · Call duration
+  · Lead conversion rates
+  · AI response times
+  · Callback request rates
+  · Cost per lead
+
+Error Tracking (Optional)
+
+· Sentry: https://docs.sentry.io/
+· Implementation: Error boundary and API error logging
+
+---
+
+THIRD-PARTY APIs & SERVICES
+
+QR Code Generation
+
+· Library: qr-code-styling or qrcode
+· Docs:
+  · https://www.npmjs.com/package/qr-code-styling
+  · https://www.npmjs.com/package/qrcode
+
+File Processing
+
+· PDF.js: https://mozilla.github.io/pdf.js/ (for knowledge base PDFs)
+· Text Extraction: Native JavaScript File API
+
+---
+
+DEVELOPMENT TOOLS
+
+Package Management
+
+· npm: https://docs.npmjs.com/
+· Package.json scripts for build/deploy
+
+Development Dependencies
+
+```json
+{
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/uuid": "^9.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+Production Dependencies (UPDATED)
+
+```json
+{
+  "dependencies": {
+    "next": "14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "@deepgram/sdk": "^2.0.0",
+    "openai": "^4.20.0",
+    "@google/generative-ai": "^0.8.0",
+    "livekit-server-sdk": "^2.0.0",
+    "livekit-client": "^2.0.0",
+    "asana": "^0.18.0",
+    "tavily": "^1.0.0",
+    "resend": "^3.0.0",
+    "redis": "^4.6.0",
+    "tailwindcss": "^3.3.0",
+    "lucide-react": "^0.294.0",
+    "date-fns": "^2.30.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.0.0"
+  }
+}
+```
+
+---
+
+KNOWLEDGE BASE ARCHITECTURE (UPDATED)
+
+File Processing Flow
+
+1. Upload: Supabase Storage → File validation
+2. Processing: Google Gemini File Search API → Embeddings
+3. Indexing: Semantic search index built
+4. Querying: RAG responses with citations
+
+Search Strategy (UPDATED)
+
+```
+Primary: Google Gemini File Search (RAG)
+  ↓ (If confidence < 0.7)
+Fallback: Tavily Web Search
+  ↓ (Max 1 search per conversation)
+Response: "Based on [source]..." or "I found online that..."
+```
+
+---
+
+VOICE ARCHITECTURE (UPDATED)
+
+LiveKit + Deepgram Flow
+
+```
+Browser → LiveKit (WebRTC) → Deepgram STT → GPT-4-mini → Deepgram TTS → Browser
+                              ↓
+                    Google Gemini RAG
+                              ↓
+                      Tavily (fallback)
+```
+
+Audio Processing
+
+· Ringtone: Web Audio API MP3 playback (2 rings)
+· Input: Browser microphone → LiveKit → Deepgram STT
+· Output: Deepgram TTS → LiveKit → Browser audio playback
+· Monitoring: Real-time diagnostics panel
+
+---
+
+ADMIN DASHBOARD TECHNICAL STACK
+
+Data Visualization
+
+· Recharts: https://recharts.org/en-US/ (for analytics charts)
+· Real-time Updates: Supabase Realtime subscriptions
+
+Table Management
+
+· Server-side Pagination: Next.js API routes
+· Sorting/Filtering: Database queries with indexes
+· Search: Full-text search on transcripts
+
+---
+
+SECURITY IMPLEMENTATION
+
+Environment Security
+
+· All API keys server-side only
+· Supabase RLS for data access control
+· JWT token validation for all API routes
+
+Data Protection
+
+· Sensitive fields encrypted at database level
+· No audio recording - transcripts only
+· GDPR-compliant data retention policies
+· Consent ticket system for audit trails
+
+---
+
+SCALING ARCHITECTURE (NEW)
+
+Multi-Tier Scaling Strategy
+
+· Tier 1 (1-50 calls): Vercel Serverless + Direct APIs
+· Tier 2 (50-500 calls): LiveKit + Redis session management
+· Tier 3 (500-5000+ calls): Dedicated LiveKit instances + optimized pipelines
+
+Cost Controls
+
+· Usage monitoring with automatic alerts
+· Budget caps per customer
+· Rate limiting on AI API calls
+
+---
+
+This complete tech stack provides:
+
+· Cost-optimized architecture (80% savings vs OpenAI Realtime)
+· Enterprise-grade scalability (LiveKit + Supabase + Vercel)
+· Best-in-class AI (Deepgram + GPT-4-mini + Gemini RAG + Tavily)
+· Robust integrations (Asana/Slack for callbacks)
+· Complete observability (real-time diagnostics + admin dashboard)
+
+All technologies are well-documented with active communities and enterprise support.
