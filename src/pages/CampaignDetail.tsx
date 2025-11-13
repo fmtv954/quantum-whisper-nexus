@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Edit2, Save, X, Workflow, Upload, Users, TrendingUp } from "lucide-react";
 import { getCurrentAccountId } from "@/lib/data";
-import { getCampaignById, updateCampaign, getRecentCallsForCampaign, type Campaign } from "@/lib/campaigns";
+import { getCampaignById, updateCampaign, updateCampaignStatus, getRecentCallsForCampaign, type Campaign } from "@/lib/campaigns";
 import { formatRelativeTime, formatDuration } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
 
@@ -98,6 +98,28 @@ export default function CampaignDetail() {
       toast({
         title: "Error",
         description: "Failed to update campaign.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleActivateCampaign() {
+    if (!id || !campaign) return;
+
+    const accountId = await getCurrentAccountId();
+    if (!accountId) return;
+
+    const updated = await updateCampaignStatus(accountId, id, 'active');
+    if (updated) {
+      setCampaign(updated);
+      toast({
+        title: "Campaign activated",
+        description: "Your campaign is now live and ready for calls.",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Failed to activate campaign.",
         variant: "destructive",
       });
     }
@@ -201,6 +223,11 @@ export default function CampaignDetail() {
                   <div className="flex items-center gap-3">
                     <h1 className="text-3xl font-bold tracking-tight">{campaign.name}</h1>
                     <Badge variant={getStatusVariant(campaign.status)}>{campaign.status}</Badge>
+                    {campaign.status === 'draft' && (
+                      <Button onClick={handleActivateCampaign} size="sm">
+                        Activate Campaign
+                      </Button>
+                    )}
                   </div>
                   {campaign.description && (
                     <p className="text-muted-foreground">{campaign.description}</p>

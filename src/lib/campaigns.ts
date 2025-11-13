@@ -99,6 +99,31 @@ export async function createCampaignForAccount(
 }
 
 /**
+ * Update campaign status
+ */
+export async function updateCampaignStatus(
+  accountId: string,
+  campaignId: string,
+  status: 'draft' | 'active' | 'paused' | 'archived'
+): Promise<Campaign | null> {
+  try {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update({ status })
+      .eq('account_id', accountId)
+      .eq('id', campaignId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Campaign;
+  } catch (error) {
+    console.error('Error updating campaign status:', error);
+    return null;
+  }
+}
+
+/**
  * Update an existing campaign
  */
 export async function updateCampaign(
