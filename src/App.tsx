@@ -18,6 +18,9 @@ import Leads from "./pages/Leads";
 import LeadDetail from "./pages/LeadDetail";
 import Call from "./pages/Call";
 import FlowDesigner from "./pages/FlowDesigner";
+import Knowledge from "./pages/Knowledge";
+import KnowledgeDocuments from "./pages/KnowledgeDocuments";
+import KnowledgeUpload from "./pages/KnowledgeUpload";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -118,6 +121,32 @@ const App = () => (
           element={
             <ProtectedRoute>
               <FlowDesigner />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Knowledge Base - protected */}
+        <Route
+          path="/knowledge"
+          element={
+            <ProtectedRoute>
+              <Knowledge />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/knowledge/documents"
+          element={
+            <ProtectedRoute>
+              <KnowledgeDocuments />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/knowledge/upload"
+          element={
+            <ProtectedRoute>
+              <KnowledgeUpload />
             </ProtectedRoute>
           }
         />
