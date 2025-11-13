@@ -76,6 +76,19 @@ This folder contains the canonical documentation for the Quantum Voice AI Platfo
 
 ---
 
+### `07-data-model-reference.md`
+**What it covers:** Complete database schema, table relationships, RLS policies, TypeScript types, and data flow examples.
+
+**Use this when:**
+- Implementing database queries or mutations
+- Understanding multi-tenant data isolation
+- Creating new tables or modifying schema
+- Working with TypeScript types for data
+- Debugging data access or permission issues
+- Planning data migrations
+
+---
+
 ## Critical Guidelines
 
 ### For All Development Work:
@@ -195,6 +208,7 @@ Build [feature name] according to the docs above.
 | Build a new UI component            | 04           |
 | Find a specific route/page          | 05           |
 | Configure AI agent behavior         | 06           |
+| Query or modify database schema     | 07           |
 
 ---
 
