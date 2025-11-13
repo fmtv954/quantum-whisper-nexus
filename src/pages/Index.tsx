@@ -1,12 +1,33 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import Hero from "@/components/Hero";
+import Features from "@/components/Features";
+import Architecture from "@/components/Architecture";
+import CTA from "@/components/CTA";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <Hero />
+      <Features />
+      <Architecture />
+      <CTA />
+      
+      {/* Footer */}
+      <footer className="border-t border-border/50 py-12 px-4">
+        <div className="max-w-7xl mx-auto text-center">
+          <div className="font-mono text-2xl font-bold mb-4 holographic-text">
+            QUANTUM VOICE AI
+          </div>
+          <p className="text-sm text-muted-foreground mb-6">
+            Enterprise Voice AI Platform • Built with Next.js, Supabase & LiveKit
+          </p>
+          <div className="flex justify-center gap-8 text-sm text-muted-foreground">
+            <a href="#" className="hover:text-cyber-blue transition-colors">Documentation</a>
+            <a href="#" className="hover:text-cyber-blue transition-colors">API Reference</a>
+            <a href="#" className="hover:text-cyber-blue transition-colors">Support</a>
+            <a href="#" className="hover:text-cyber-blue transition-colors">Status</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
