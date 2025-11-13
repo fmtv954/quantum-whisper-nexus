@@ -322,20 +322,62 @@ export default function Call() {
       // End session in DB
       const { session } = await endCallSession(callSession.id, { createLead: true });
 
-      // Track usage: OpenAI Realtime API cost
+      // Track usage: Deepgram + OpenAI costs
       if (session.duration_ms && campaign?.account_id) {
         const durationMinutes = Math.ceil(session.duration_ms / 60000);
+        const durationSeconds = Math.ceil(session.duration_ms / 1000);
+        
         try {
+          // Deepgram STT cost: $0.0077/minute
+          await recordUsageEvent({
+            accountId: campaign.account_id,
+            campaignId: campaignId,
+            callId: session.id,
+            provider: "deepgram",
+            service: "stt",
+            unitType: "minutes",
+            units: durationMinutes,
+            unitCostUsd: 0.0077,
+            metadata: { model: "nova-2" },
+          });
+
+          // Deepgram TTS cost: $0.015-$0.03/1K chars (estimate ~150 chars/min)
+          await recordUsageEvent({
+            accountId: campaign.account_id,
+            campaignId: campaignId,
+            callId: session.id,
+            provider: "deepgram",
+            service: "tts",
+            unitType: "characters",
+            units: durationMinutes * 150,
+            unitCostUsd: 0.015 / 1000,
+            metadata: { voice: "aura-asteria-en" },
+          });
+
+          // OpenAI GPT-4-mini cost: ~$0.15/1M input, $0.60/1M output (estimate)
           await recordUsageEvent({
             accountId: campaign.account_id,
             campaignId: campaignId,
             callId: session.id,
             provider: "openai",
-            service: "realtime-api",
+            service: "llm",
+            unitType: "tokens",
+            units: durationMinutes * 500, // Rough estimate
+            unitCostUsd: 0.00038, // Blended avg
+            metadata: { model: "gpt-4o-mini" },
+          });
+
+          // LiveKit cost: $0.004-$0.005/participant-minute
+          await recordUsageEvent({
+            accountId: campaign.account_id,
+            campaignId: campaignId,
+            callId: session.id,
+            provider: "livekit",
+            service: "webrtc",
             unitType: "minutes",
             units: durationMinutes,
-            unitCostUsd: 0.30, // $0.06 input + $0.24 output avg
-            metadata: { model: "gpt-4o-realtime-preview-2024-12-17" },
+            unitCostUsd: 0.0045,
+            metadata: { transport: "audio-only" },
           });
         } catch (error) {
           console.warn("Failed to record usage:", error);
