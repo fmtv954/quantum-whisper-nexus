@@ -233,12 +233,13 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     throw new Error('DEEPGRAM_API_KEY not configured');
   }
 
+  // Updated to 16kHz Opus to match LiveKit audio
   const deepgramUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
     model: 'nova-2',
     punctuate: 'true',
     interim_results: 'true',
-    encoding: 'linear16',
-    sample_rate: '24000',
+    encoding: 'opus', // Opus encoding from LiveKit
+    sample_rate: '16000', // 16kHz as per spec
     channels: '1',
   });
 
