@@ -1,36 +1,29 @@
 /**
- * Call Interface (MVP - Text-based simulation)
- * 
- * This is a text-based call simulation for testing UX and data flows.
- * Future integrations will replace text input with:
- * - LiveKit WebRTC for real-time voice
- * - Deepgram STT for speech-to-text
- * - Deepgram TTS for text-to-speech
- * - OpenAI GPT + RAG for intelligent responses
- * - Real consent and lead capture workflows
+ * Call Interface - Real-Time Voice AI
+ * Phase 1: OpenAI Realtime API with WebRTC
  */
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { Phone, PhoneOff, Clock, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { RealtimeChat } from "@/lib/audio/RealtimeChat";
 import {
   createCallSession,
   endCallSession,
-  appendTranscriptSegment,
-  generateStubAIResponse,
+  recordTranscriptSegments,
   type CallSession,
-  type TranscriptSegment,
 } from "@/lib/calls";
-import { supabase } from "@/integrations/supabase/client";
-import { Phone, PhoneOff, Send, Clock, Loader2 } from "lucide-react";
+import { getFlowForCampaign } from "@/lib/flows";
+import { runFlowStep, type FlowContext } from "@/lib/flow-runtime";
 
 interface Message {
   id: string;
-  speaker: "caller" | "ai_agent";
+  speaker: "user" | "assistant";
   text: string;
   timestamp: Date;
 }
@@ -39,15 +32,21 @@ export default function Call() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const [campaign, setCampaign] = useState<any>(null);
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  
+  const realtimeChatRef = useRef<RealtimeChat | null>(null);
+  const flowContextRef = useRef<FlowContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const transcriptBufferRef = useRef<Array<{ speaker: "caller" | "ai_agent"; text: string }>>([]);
 
   // Load campaign info
   useEffect(() => {

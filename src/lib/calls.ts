@@ -214,6 +214,62 @@ export async function appendTranscriptSegment(
 }
 
 /**
+ * Record a batch of transcript segments at once
+ * Useful for real-time voice transcription
+ */
+export async function recordTranscriptSegments(
+  callId: string,
+  segments: Array<{
+    speaker: "caller" | "ai_agent" | "human_agent" | "system";
+    text: string;
+  }>
+) {
+  if (segments.length === 0) return;
+
+  // Get current segment count
+  const { data: existingSegments } = await supabase
+    .from("call_transcripts")
+    .select("segment_index")
+    .eq("call_id", callId)
+    .order("segment_index", { ascending: false })
+    .limit(1);
+
+  let nextIndex = existingSegments && existingSegments.length > 0 
+    ? existingSegments[0].segment_index + 1 
+    : 0;
+
+  // Get call start time for offset calculation
+  const { data: session } = await supabase
+    .from("call_sessions")
+    .select("started_at")
+    .eq("id", callId)
+    .single();
+
+  const startTime = session ? new Date(session.started_at).getTime() : Date.now();
+
+  const records = segments.map((seg) => {
+    const offsetMs = Date.now() - startTime;
+    return {
+      call_id: callId,
+      segment_index: nextIndex++,
+      speaker: seg.speaker,
+      text: seg.text,
+      offset_ms: offsetMs,
+      metadata: {},
+    };
+  });
+
+  const { error } = await supabase.from("call_transcripts").insert(records);
+
+  if (error) {
+    console.error("Error recording transcript batch:", error);
+    throw error;
+  }
+
+  console.log(`[Call] Recorded ${segments.length} transcript segments`);
+}
+
+/**
  * Get call session with full transcript
  * Used for debugging and future call detail views
  */

@@ -1,1 +1,7 @@
 project_id = "rwpndifkuwnohkzqmqoa"
+
+[functions.realtime-token]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = true
