@@ -24,12 +24,14 @@ export class VoiceOrchestrator {
   private room: Room | null = null;
   private callbacks: VoiceOrchestratorCallbacks;
   private isConnected = false;
+  private callId: string | null = null;
+  private audioContext: AudioContext | null = null;
 
   constructor(callbacks: VoiceOrchestratorCallbacks) {
     this.callbacks = callbacks;
   }
 
-  async connect(livekitUrl: string, token: string) {
+  async connect(livekitUrl: string, token: string, campaignId: string, accountId: string) {
     try {
       console.log('[VoiceOrchestrator] Connecting to LiveKit...');
       
@@ -56,12 +58,41 @@ export class VoiceOrchestrator {
       // Enable microphone
       await this.room.localParticipant.setMicrophoneEnabled(true);
 
+      // Start call session with backend orchestrator
+      await this.startCallSession(campaignId, accountId);
+
       console.log('[VoiceOrchestrator] Connected successfully');
       this.isConnected = true;
       this.callbacks.onConnect?.();
     } catch (error) {
       console.error('[VoiceOrchestrator] Connection error:', error);
       this.callbacks.onError?.(error as Error);
+      throw error;
+    }
+  }
+
+  private async startCallSession(campaignId: string, accountId: string) {
+    try {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'start_call',
+          campaignId,
+          context: { accountId },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to start call session: ${response.status}`);
+      }
+
+      const { callId } = await response.json();
+      this.callId = callId;
+      console.log(`[VoiceOrchestrator] Call session started: ${callId}`);
+    } catch (error) {
+      console.error('[VoiceOrchestrator] Failed to start call session:', error);
       throw error;
     }
   }
@@ -101,24 +132,94 @@ export class VoiceOrchestrator {
   }
 
   async sendMessage(text: string) {
-    if (!this.room || !this.isConnected) {
-      throw new Error('Not connected to room');
+    if (!this.callId) {
+      throw new Error('Call session not started');
     }
 
     console.log('[VoiceOrchestrator] Sending text message:', text);
 
-    // Send text via data channel to backend orchestrator
-    const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify({
-      type: 'text_input',
-      text,
-    }));
+    try {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'user_text',
+          callId: this.callId,
+          text,
+        }),
+      });
 
-    await this.room.localParticipant.publishData(data, { reliable: true });
+      if (!response.ok) {
+        throw new Error(`Failed to send message: ${response.status}`);
+      }
+
+      const { response: aiResponse, audioResponse } = await response.json();
+      
+      // Notify callbacks
+      this.callbacks.onTranscriptDelta?.(text, 'user');
+      this.callbacks.onTranscriptDelta?.(aiResponse, 'assistant');
+
+      // Play audio response
+      if (audioResponse) {
+        await this.playAudioResponse(audioResponse);
+      }
+
+      return aiResponse;
+    } catch (error) {
+      console.error('[VoiceOrchestrator] Failed to send message:', error);
+      this.callbacks.onError?.(error as Error);
+      throw error;
+    }
+  }
+
+  private async playAudioResponse(base64Audio: string) {
+    try {
+      const audioBytes = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0));
+      
+      if (!this.audioContext) {
+        this.audioContext = new AudioContext();
+      }
+
+      const audioBuffer = await this.audioContext.decodeAudioData(audioBytes.buffer);
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.audioContext.destination);
+      
+      this.callbacks.onSpeakingChange?.(true);
+
+      source.onended = () => {
+        this.callbacks.onSpeakingChange?.(false);
+      };
+
+      source.start(0);
+    } catch (error) {
+      console.error('[VoiceOrchestrator] Failed to play audio:', error);
+    }
   }
 
   disconnect() {
     console.log('[VoiceOrchestrator] Disconnecting...');
+    
+    // End call session
+    if (this.callId) {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      fetch(`${SUPABASE_URL}/functions/v1/voice-orchestrator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'end_call',
+          callId: this.callId,
+        }),
+      }).catch(error => {
+        console.error('[VoiceOrchestrator] Failed to end call session:', error);
+      });
+    }
+
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
     
     if (this.room) {
       this.room.disconnect();
@@ -126,6 +227,7 @@ export class VoiceOrchestrator {
     }
 
     this.isConnected = false;
+    this.callId = null;
   }
 
   getConnectionState(): boolean {
