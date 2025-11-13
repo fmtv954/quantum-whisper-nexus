@@ -112,11 +112,12 @@ function handleWebSocket(req: Request): Response {
             throw new Error('No active call');
           }
 
-          // TODO: Buffer and process audio chunks in real-time
-          // For now, just acknowledge receipt
-          console.log(`[WebSocket] Received audio chunk for call ${currentCallId}`);
+          // Buffer audio chunk for STT processing (Step 3)
+          const chunkSize = message.audioData ? message.audioData.length : 0;
+          console.log(`[WebSocket] Received audio chunk for call ${currentCallId} (${chunkSize} bytes)`);
           
-          // Echo back for testing
+          // TODO Step 3: Forward to Deepgram STT streaming API
+          // For now, acknowledge receipt
           socket.send(JSON.stringify({
             type: 'audio_received',
             callId: currentCallId

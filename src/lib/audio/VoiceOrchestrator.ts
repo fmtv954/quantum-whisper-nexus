@@ -12,6 +12,136 @@ import {
   RemoteParticipant,
 } from 'livekit-client';
 
+// ============= Audio Encoding Utilities =============
+
+/**
+ * Convert Float32Array PCM audio to Int16 PCM and encode as base64
+ */
+function encodeAudioChunk(float32Array: Float32Array): string {
+  // Convert Float32 (-1.0 to 1.0) to Int16 (-32768 to 32767)
+  const int16Array = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  
+  // Convert to Uint8Array for base64 encoding
+  const uint8Array = new Uint8Array(int16Array.buffer);
+  
+  // Convert to base64 in chunks to avoid stack overflow
+  let binary = '';
+  const chunkSize = 0x8000; // 32KB chunks
+  
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+    binary += String.fromCharCode(...Array.from(chunk));
+  }
+  
+  return btoa(binary);
+}
+
+/**
+ * Audio recorder for capturing microphone input
+ */
+class AudioRecorder {
+  private stream: MediaStream | null = null;
+  private audioContext: AudioContext | null = null;
+  private processor: ScriptProcessorNode | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private isRecording = false;
+
+  constructor(private onAudioData: (audioData: Float32Array) => void) {}
+
+  async start() {
+    if (this.isRecording) {
+      console.warn('AudioRecorder: Already recording');
+      return;
+    }
+
+    try {
+      console.log('AudioRecorder: Requesting microphone access...');
+      
+      // Request microphone access with optimal settings for voice
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 24000, // 24kHz for Deepgram
+          channelCount: 1,   // Mono
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      console.log('AudioRecorder: Microphone access granted');
+      
+      // Create audio context with 24kHz sample rate
+      this.audioContext = new AudioContext({
+        sampleRate: 24000,
+      });
+      
+      // Create source from microphone stream
+      this.source = this.audioContext.createMediaStreamSource(this.stream);
+      
+      // Create processor for capturing audio chunks
+      // Buffer size of 4096 samples = ~170ms at 24kHz
+      this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+      
+      this.processor.onaudioprocess = (e) => {
+        if (!this.isRecording) return;
+        
+        const inputData = e.inputBuffer.getChannelData(0);
+        this.onAudioData(new Float32Array(inputData));
+      };
+      
+      // Connect the audio graph
+      this.source.connect(this.processor);
+      this.processor.connect(this.audioContext.destination);
+      
+      this.isRecording = true;
+      console.log('AudioRecorder: Recording started');
+    } catch (error) {
+      console.error('AudioRecorder: Error starting recording:', error);
+      throw error;
+    }
+  }
+
+  stop() {
+    console.log('AudioRecorder: Stopping recording...');
+    this.isRecording = false;
+    
+    if (this.source) {
+      this.source.disconnect();
+      this.source = null;
+    }
+    
+    if (this.processor) {
+      this.processor.disconnect();
+      this.processor = null;
+    }
+    
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('AudioRecorder: Stopped track:', track.kind);
+      });
+      this.stream = null;
+    }
+    
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+    
+    console.log('AudioRecorder: Recording stopped');
+  }
+
+  isActive(): boolean {
+    return this.isRecording;
+  }
+}
+
+// ============= VoiceOrchestrator =============
+
 export interface VoiceOrchestratorCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
@@ -27,6 +157,7 @@ export class VoiceOrchestrator {
   private isConnected = false;
   private callId: string | null = null;
   private audioContext: AudioContext | null = null;
+  private audioRecorder: AudioRecorder | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 3;
 
@@ -45,7 +176,7 @@ export class VoiceOrchestrator {
       this.ws = new WebSocket(wsUrl);
 
       // Set up WebSocket handlers
-      this.ws.onopen = () => {
+      this.ws.onopen = async () => {
         console.log('[VoiceOrchestrator] WebSocket connected');
         
         // Start call session
@@ -54,6 +185,18 @@ export class VoiceOrchestrator {
           campaignId,
           accountId,
         }));
+
+        // Initialize and start audio recorder
+        try {
+          this.audioRecorder = new AudioRecorder((audioData) => {
+            this.handleAudioChunk(audioData);
+          });
+          await this.audioRecorder.start();
+          console.log('[VoiceOrchestrator] Audio recording started');
+        } catch (error) {
+          console.error('[VoiceOrchestrator] Failed to start audio recording:', error);
+          this.callbacks.onError?.(new Error('Failed to access microphone. Please check permissions.'));
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -196,22 +339,28 @@ export class VoiceOrchestrator {
     }
   }
 
-  sendAudioChunk(audioData: string) {
+  private handleAudioChunk(audioData: Float32Array) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn('[VoiceOrchestrator] WebSocket not ready, skipping audio chunk');
-      return;
+      return; // Not ready to send
     }
 
     if (!this.callId) {
-      console.warn('[VoiceOrchestrator] No active call, skipping audio chunk');
-      return;
+      return; // No active call
     }
 
-    this.ws.send(JSON.stringify({
-      type: 'audio_chunk',
-      callId: this.callId,
-      audioData,
-    }));
+    try {
+      // Encode audio chunk to base64
+      const encoded = encodeAudioChunk(audioData);
+      
+      // Send to backend
+      this.ws.send(JSON.stringify({
+        type: 'audio_chunk',
+        callId: this.callId,
+        audioData: encoded,
+      }));
+    } catch (error) {
+      console.error('[VoiceOrchestrator] Error encoding audio chunk:', error);
+    }
   }
 
   private async playAudioResponse(base64Audio: string) {
@@ -242,6 +391,12 @@ export class VoiceOrchestrator {
   disconnect() {
     console.log('[VoiceOrchestrator] Disconnecting...');
     
+    // Stop audio recording
+    if (this.audioRecorder) {
+      this.audioRecorder.stop();
+      this.audioRecorder = null;
+    }
+
     // End call session via WebSocket
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.callId) {
       this.ws.send(JSON.stringify({
