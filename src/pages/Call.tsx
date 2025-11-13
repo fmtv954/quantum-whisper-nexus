@@ -8,19 +8,18 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Phone, PhoneOff, Clock, Loader2 } from "lucide-react";
+import { Phone, PhoneOff, Clock, Loader2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { RealtimeChat } from "@/lib/audio/RealtimeChat";
+import { VoiceOrchestrator } from "@/lib/audio/VoiceOrchestrator";
 import {
   createCallSession,
   endCallSession,
   recordTranscriptSegments,
   type CallSession,
 } from "@/lib/calls";
-import { getFlowForCampaign } from "@/lib/flows";
-import { runFlowStep, type FlowContext } from "@/lib/flow-runtime";
-import { playPhoneRing, startHoldMusic, stopHoldMusic } from "@/lib/audio/AudioEffects";
+import { playPhoneRing } from "@/lib/audio/AudioEffects";
 import { recordUsageEvent } from "@/lib/usage";
 
 interface Message {
@@ -44,14 +43,13 @@ export default function Call() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRinging, setIsRinging] = useState(false);
-  const [isOnHold, setIsOnHold] = useState(false);
+  const [userInput, setUserInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   
-  const realtimeChatRef = useRef<RealtimeChat | null>(null);
-  const flowContextRef = useRef<FlowContext | null>(null);
+  const voiceOrchestratorRef = useRef<VoiceOrchestrator | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptBufferRef = useRef<Array<{ speaker: "caller" | "ai_agent"; text: string }>>([]);
-  const isOnHoldRef = useRef<boolean>(false);
 
   // Load campaign info
   useEffect(() => {
@@ -119,8 +117,8 @@ export default function Call() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (realtimeChatRef.current) {
-        realtimeChatRef.current.disconnect();
+      if (voiceOrchestratorRef.current) {
+        voiceOrchestratorRef.current.disconnect();
       }
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -146,7 +144,7 @@ export default function Call() {
   };
 
   const handleStartCall = async () => {
-    if (!campaignId) return;
+    if (!campaignId || !campaign) return;
 
     setIsConnecting(true);
     setIsRinging(true);
@@ -154,7 +152,7 @@ export default function Call() {
     try {
       console.log("[Call] Starting call session...");
 
-      // Play phone ring (2 times, ~3 seconds)
+      // Play phone ring
       await playPhoneRing();
       setIsRinging(false);
 
@@ -162,140 +160,107 @@ export default function Call() {
       const session = await createCallSession(campaignId);
       setCallSession(session);
 
-      // Load flow for campaign
-      const flow = await getFlowForCampaign(campaignId);
-      if (!flow) {
-        throw new Error("No flow configured for this campaign");
+      // Get LiveKit token
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
+        body: {
+          campaignId,
+          callSessionId: session.id,
+        },
+      });
+
+      if (tokenError || !tokenData) {
+        throw new Error('Failed to get LiveKit token');
       }
 
-      console.log("[Call] Flow loaded:", flow.name);
+      console.log("[Call] Got LiveKit token");
 
-      // Initialize flow context
-      const startNode = flow.definition.nodes.find(n => n.type === "start");
-      if (!startNode) {
-        throw new Error("Flow must have a start node");
-      }
-
-      flowContextRef.current = {
-        flowDefinition: flow.definition,
-        currentNodeId: startNode.id,
-        conversationHistory: [],
-        leadData: {},
-      };
-
-      // Build system prompt from flow
-      const systemPrompt = buildSystemPromptFromFlow(flow.definition);
-
-      // Initialize RealtimeChat
-      const realtimeChat = new RealtimeChat({
+      // Initialize Voice Orchestrator
+      voiceOrchestratorRef.current = new VoiceOrchestrator({
         onConnect: () => {
-          console.log("[Call] Connected to voice AI");
+          console.log("[Call] Voice orchestrator connected");
           setIsConnected(true);
           setIsConnecting(false);
           
-          // Start with greeting from flow
-          if (flowContextRef.current) {
-            runFlowStep(flowContextRef.current).then(result => {
-              const greeting: Message = {
-                id: Date.now().toString(),
-                speaker: "assistant",
-                text: result.agentText,
-                timestamp: new Date(),
-              };
-              setMessages([greeting]);
-              
-              // Buffer for DB
-              transcriptBufferRef.current.push({
-                speaker: "ai_agent",
-                text: result.agentText,
-              });
-
-              // Update flow context
-              if (result.nextNodeId) {
-                flowContextRef.current!.currentNodeId = result.nextNodeId;
-              }
-              
-              // Handle actions from flow
-              if (result.actions.includes("PUT_ON_HOLD")) {
-                setIsOnHold(true);
-                startHoldMusic();
-              }
-            });
-          }
+          // Add greeting message
+          const greetingMsg: Message = {
+            id: crypto.randomUUID(),
+            speaker: "assistant",
+            text: "Hello! How can I help you today?",
+            timestamp: new Date(),
+          };
+          setMessages([greetingMsg]);
         },
         onDisconnect: () => {
-          console.log("[Call] Disconnected");
+          console.log("[Call] Voice orchestrator disconnected");
           setIsConnected(false);
-          flushTranscriptBuffer();
         },
-        onTranscriptDelta: (text, speaker) => {
-          console.log(`[Call] Transcript delta: ${speaker} - ${text}`);
+        onTranscriptDelta: (text: string, speaker: "user" | "assistant") => {
+          const msg: Message = {
+            id: crypto.randomUUID(),
+            speaker,
+            text,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, msg]);
           
-          setMessages(prev => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg && lastMsg.speaker === speaker) {
-              // Append to existing message
-              const updatedText = lastMsg.text + text;
-              
-              // Check if AI mentions putting on hold
-              if (speaker === "assistant" && /please hold|hold for|one moment/i.test(updatedText) && !isOnHoldRef.current) {
-                setTimeout(() => {
-                  isOnHoldRef.current = true;
-                  setIsOnHold(true);
-                  startHoldMusic();
-                }, 1000); // Start hold music 1 second after the hold phrase
-              }
-              
-              return [
-                ...prev.slice(0, -1),
-                { ...lastMsg, text: updatedText },
-              ];
-            } else {
-              // New message
-              return [
-                ...prev,
-                {
-                  id: Date.now().toString(),
-                  speaker,
-                  text,
-                  timestamp: new Date(),
-                },
-              ];
-            }
+          // Buffer for database
+          transcriptBufferRef.current.push({
+            speaker: speaker === "user" ? "caller" : "ai_agent",
+            text,
           });
         },
-        onSpeakingChange: (speaking) => {
-          setIsSpeaking(speaking);
-          
-          // If AI starts speaking while on hold, stop hold music
-          if (speaking && isOnHoldRef.current) {
-            stopHoldMusic();
-            isOnHoldRef.current = false;
-            setIsOnHold(false);
-          }
-        },
-        onError: (error) => {
-          console.error("[Call] Error:", error);
+        onError: (error: Error) => {
+          console.error("[Call] Voice orchestrator error:", error);
           toast({
-            title: "Call Error",
+            title: "Connection Error",
             description: error.message,
             variant: "destructive",
           });
         },
+        onSpeakingChange: (speaking: boolean) => {
+          setIsSpeaking(speaking);
+        },
       });
 
-      await realtimeChat.init(systemPrompt, "alloy");
-      realtimeChatRef.current = realtimeChat;
+      // Connect to LiveKit + start backend orchestrator
+      await voiceOrchestratorRef.current.connect(
+        tokenData.livekit_url,
+        tokenData.token,
+        campaignId,
+        campaign.account_id
+      );
 
       console.log("[Call] Call started successfully");
     } catch (error) {
-      console.error("Error starting call:", error);
-      setIsConnecting(false);
+      console.error("[Call] Error starting call:", error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start call",
+        title: "Failed to Start Call",
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      setIsConnecting(false);
+      setIsRinging(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!userInput.trim() || !voiceOrchestratorRef.current || isSending) return;
+
+    const messageText = userInput.trim();
+    setUserInput("");
+    setIsSending(true);
+
+    try {
+      await voiceOrchestratorRef.current.sendMessage(messageText);
+    } catch (error) {
+      console.error("[Call] Error sending message:", error);
+      toast({
+        title: "Failed to Send",
+        description: "Could not send your message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -303,96 +268,81 @@ export default function Call() {
     if (!callSession) return;
 
     try {
-      console.log("[Call] Ending call...");
-
-      // Stop hold music if playing
-      stopHoldMusic();
-      isOnHoldRef.current = false;
-      setIsOnHold(false);
-
-      // Disconnect realtime chat
-      if (realtimeChatRef.current) {
-        realtimeChatRef.current.disconnect();
-        realtimeChatRef.current = null;
+      // Disconnect voice orchestrator
+      if (voiceOrchestratorRef.current) {
+        voiceOrchestratorRef.current.disconnect();
+        voiceOrchestratorRef.current = null;
       }
 
-      // Flush remaining transcripts
+      // Flush transcripts
       await flushTranscriptBuffer();
 
-      // End session in DB
-      const { session } = await endCallSession(callSession.id, { createLead: true });
+      // End call session in database
+      const { session } = await endCallSession(callSession.id, { createLead: false });
 
-      // Track usage: Deepgram + OpenAI costs
-      if (session.duration_ms && campaign?.account_id) {
-        const durationMinutes = Math.ceil(session.duration_ms / 60000);
-        const durationSeconds = Math.ceil(session.duration_ms / 1000);
-        
-        try {
-          // Deepgram STT cost: $0.0077/minute
-          await recordUsageEvent({
-            accountId: campaign.account_id,
-            campaignId: campaignId,
-            callId: session.id,
-            provider: "deepgram",
-            service: "stt",
-            unitType: "minutes",
-            units: durationMinutes,
-            unitCostUsd: 0.0077,
-            metadata: { model: "nova-2" },
-          });
+      // Record usage for Deepgram STT, OpenAI LLM, Deepgram TTS, LiveKit
+      const durationMinutes = elapsedTime / 60;
+      
+      // Estimate tokens based on message count (rough approximation)
+      const totalTokens = messages.reduce((sum, msg) => sum + msg.text.length, 0);
+      
+      await recordUsageEvent({
+        accountId: campaign?.account_id || "",
+        campaignId: campaignId || "",
+        callId: callSession.id,
+        provider: "deepgram",
+        service: "stt",
+        unitType: "minutes",
+        units: durationMinutes,
+        unitCostUsd: 0.0077,
+        metadata: { model: "nova-2" },
+      });
 
-          // Deepgram TTS cost: $0.015-$0.03/1K chars (estimate ~150 chars/min)
-          await recordUsageEvent({
-            accountId: campaign.account_id,
-            campaignId: campaignId,
-            callId: session.id,
-            provider: "deepgram",
-            service: "tts",
-            unitType: "characters",
-            units: durationMinutes * 150,
-            unitCostUsd: 0.015 / 1000,
-            metadata: { voice: "aura-asteria-en" },
-          });
+      await recordUsageEvent({
+        accountId: campaign?.account_id || "",
+        campaignId: campaignId || "",
+        callId: callSession.id,
+        provider: "openai",
+        service: "llm",
+        unitType: "tokens",
+        units: totalTokens,
+        unitCostUsd: 0.00015,
+        metadata: { model: "gpt-4o-mini" },
+      });
 
-          // OpenAI GPT-4-mini cost: ~$0.15/1M input, $0.60/1M output (estimate)
-          await recordUsageEvent({
-            accountId: campaign.account_id,
-            campaignId: campaignId,
-            callId: session.id,
-            provider: "openai",
-            service: "llm",
-            unitType: "tokens",
-            units: durationMinutes * 500, // Rough estimate
-            unitCostUsd: 0.00038, // Blended avg
-            metadata: { model: "gpt-4o-mini" },
-          });
+      await recordUsageEvent({
+        accountId: campaign?.account_id || "",
+        campaignId: campaignId || "",
+        callId: callSession.id,
+        provider: "deepgram",
+        service: "tts",
+        unitType: "characters",
+        units: messages.filter(m => m.speaker === "assistant").reduce((sum, m) => sum + m.text.length, 0),
+        unitCostUsd: 0.000018,
+        metadata: { voice: "aura-asteria-en" },
+      });
+      
+      await recordUsageEvent({
+        accountId: campaign?.account_id || "",
+        campaignId: campaignId || "",
+        callId: session.id,
+        provider: "livekit",
+        service: "webrtc",
+        unitType: "minutes",
+        units: durationMinutes,
+        unitCostUsd: 0.0045,
+        metadata: {},
+      });
 
-          // LiveKit cost: $0.004-$0.005/participant-minute
-          await recordUsageEvent({
-            accountId: campaign.account_id,
-            campaignId: campaignId,
-            callId: session.id,
-            provider: "livekit",
-            service: "webrtc",
-            unitType: "minutes",
-            units: durationMinutes,
-            unitCostUsd: 0.0045,
-            metadata: { transport: "audio-only" },
-          });
-        } catch (error) {
-          console.warn("Failed to record usage:", error);
-        }
-      }
+      console.log("[Call] Call ended and usage recorded");
+      
+      toast({
+        title: "Call Ended",
+        description: `Call duration: ${formatTime(elapsedTime)}`,
+      });
 
       setCallSession(session);
       setIsConnected(false);
-
-      toast({
-        title: "Call Ended",
-        description: `Duration: ${formatTime(Math.floor((session.duration_ms || 0) / 1000))}`,
-      });
-
-      console.log("[Call] Call ended successfully");
     } catch (error) {
       console.error("Error ending call:", error);
       toast({
@@ -485,12 +435,7 @@ export default function Call() {
                   Ringing...
                 </Badge>
               )}
-              {isOnHold && (
-                <Badge variant="secondary" className="ml-auto">
-                  On Hold
-                </Badge>
-              )}
-              {isSpeaking && !isOnHold && !isRinging && (
+              {isSpeaking && !isRinging && (
                 <Badge variant="secondary" className="ml-auto">
                   AI Speaking
                 </Badge>
@@ -529,6 +474,36 @@ export default function Call() {
             <div ref={messagesEndRef} />
           </CardContent>
         </Card>
+
+        {/* Text Input (for testing without voice) */}
+        {isConnected && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                className="flex gap-2"
+              >
+                <Input
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  placeholder="Type a message..."
+                  disabled={isSending}
+                  className="flex-1"
+                />
+                <Button
+                  type="submit"
+                  disabled={!userInput.trim() || isSending}
+                >
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Call Controls */}
         <div className="flex justify-center gap-4">
