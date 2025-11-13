@@ -160,6 +160,9 @@ export default function Call() {
     if (!campaignId || !campaign) return;
 
     try {
+      setIsConnecting(true);
+      setIsRinging(true);
+
       // Generate consent ticket ID
       const consentTicketId = crypto.randomUUID();
 
@@ -177,26 +180,7 @@ export default function Call() {
       setLeadName(data.name || null);
       setShowLeadCapture(false);
 
-      // Now start the call
-      await handleStartCall();
-    } catch (error) {
-      console.error("[Call] Error creating lead:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save your information. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleStartCall = async () => {
-    if (!campaignId || !campaign) return;
-
-    setIsConnecting(true);
-    setIsRinging(true);
-    
-    try {
-      console.log("[Call] Starting call session...");
+      console.log("[Call] Starting call with LiveKit (16kHz Opus)...");
 
       // Play phone ring
       await playPhoneRing();
@@ -206,12 +190,11 @@ export default function Call() {
       const session = await createCallSession(campaignId);
       setCallSession(session);
 
-      // Link lead to call if we have a lead
-      if (leadId) {
-        await linkLeadToCall(leadId, session.id);
-      }
+      // Link lead to call
+      await linkLeadToCall(lead.id, session.id);
 
       // Get LiveKit token
+      console.log("[Call] Fetching LiveKit token...");
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
         body: {
           campaignId,
@@ -223,44 +206,40 @@ export default function Call() {
         throw new Error('Failed to get LiveKit token');
       }
 
-      console.log("[Call] Got LiveKit token");
+      const { token, url: livekitUrl, roomName } = tokenData;
+      console.log("[Call] LiveKit token received, room:", roomName);
 
-      // Initialize Voice Orchestrator
-      voiceOrchestratorRef.current = new VoiceOrchestrator({
-        onConnect: () => {
-          console.log("[Call] Voice orchestrator connected");
-          setIsConnected(true);
-          setIsConnecting(false);
+      // Initialize Voice Orchestrator with LiveKit (16kHz Opus)
+      const orchestrator = new VoiceOrchestrator({
+        onConnectionStatus: (status) => {
+          console.log("[Call] Connection status:", status);
+          if (status === "connected") {
+            setIsConnected(true);
+            setIsConnecting(false);
+          } else if (status === "disconnected") {
+            setIsConnected(false);
+          }
+        },
+        onTranscript: (text, speaker, isFinal) => {
+          console.log(`[Call] Transcript (${speaker}, final=${isFinal}):`, text);
           
-          // Add greeting message
-          const greetingMsg: Message = {
-            id: crypto.randomUUID(),
-            speaker: "assistant",
-            text: "Hello! How can I help you today?",
-            timestamp: new Date(),
-          };
-          setMessages([greetingMsg]);
+          if (isFinal) {
+            const message: Message = {
+              id: crypto.randomUUID(),
+              speaker: speaker === "user" ? "user" : "assistant",
+              text,
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, message]);
+
+            // Buffer transcript for persistence
+            transcriptBufferRef.current.push({
+              speaker: speaker === "user" ? "caller" : "ai_agent",
+              text,
+            });
+          }
         },
-        onDisconnect: () => {
-          console.log("[Call] Voice orchestrator disconnected");
-          setIsConnected(false);
-        },
-        onTranscriptDelta: (text: string, speaker: "user" | "assistant") => {
-          const msg: Message = {
-            id: crypto.randomUUID(),
-            speaker,
-            text,
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, msg]);
-          
-          // Buffer for database
-          transcriptBufferRef.current.push({
-            speaker: speaker === "user" ? "caller" : "ai_agent",
-            text,
-          });
-        },
-        onError: (error: Error) => {
+        onError: (error) => {
           console.error("[Call] Voice orchestrator error:", error);
           toast({
             title: "Connection Error",
@@ -268,30 +247,39 @@ export default function Call() {
             variant: "destructive",
           });
         },
-        onSpeakingChange: (speaking: boolean) => {
+        onSpeakingChange: (speaking) => {
           setIsSpeaking(speaking);
         },
       });
 
-      // Connect to LiveKit + start backend orchestrator
-      await voiceOrchestratorRef.current.connect(
-        tokenData.livekit_url,
-        tokenData.token,
-        campaignId,
-        campaign.account_id
+      voiceOrchestratorRef.current = orchestrator;
+
+      // Connect with LiveKit WebRTC (16kHz Opus)
+      console.log("[Call] Connecting to LiveKit WebRTC...");
+      await orchestrator.connect(
+        livekitUrl,
+        token,
+        campaign.id,
+        campaign.account_id,
+        roomName
       );
 
-      console.log("[Call] Call started successfully");
+      console.log("[Call] Call started successfully with LiveKit WebRTC");
     } catch (error) {
       console.error("[Call] Error starting call:", error);
       toast({
-        title: "Failed to Start Call",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start call",
         variant: "destructive",
       });
       setIsConnecting(false);
       setIsRinging(false);
     }
+  };
+
+  const handleStartCall = async () => {
+    // Lead capture modal handles the actual call start
+    setShowLeadCapture(true);
   };
 
   const handleSendMessage = async () => {
@@ -315,10 +303,10 @@ export default function Call() {
     }
   };
 
-  const handleToggleMute = () => {
+  const handleToggleMute = async () => {
     if (voiceOrchestratorRef.current) {
       const newMutedState = !isMuted;
-      voiceOrchestratorRef.current.setMicrophoneEnabled(!newMutedState);
+      await voiceOrchestratorRef.current.setMuted(newMutedState);
       setIsMuted(newMutedState);
     }
   };
