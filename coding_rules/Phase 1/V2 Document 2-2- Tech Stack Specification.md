@@ -1,5 +1,9 @@
-V2 Document 2.2: Tech Stack Specification
+# V2 Document 2.2: Tech Stack Specification
 
+# **V2**  <span style="font-family: .SFUI-Regular; font-size: 17.0;">
+     Document 2.2: Tech Stack Specification
+
+ </span>
 CONTEXT
 
 Following the System Architecture Deep Dive, development teams need precise technology specifications, versions, and configuration details to implement the platform exactly as architected.

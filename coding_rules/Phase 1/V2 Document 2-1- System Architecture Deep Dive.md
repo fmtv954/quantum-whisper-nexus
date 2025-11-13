@@ -1,5 +1,9 @@
-V2 Document 2.1: System Architecture Deep Dive
+# V2 Document 2.1: System Architecture Deep Dive
 
+# **V2**  <span style="font-family: .SFUI-Regular; font-size: 17.0;">
+     Document 2.1: System Architecture Deep Dive
+
+ </span>
 CONTEXT
 
 Following the Quick Start Guide, users and developers need comprehensive understanding of the underlying architecture to build, extend, and troubleshoot the platform effectively.
@@ -100,7 +104,7 @@ graph TB
     subgraph Client Layer
         A[Web Browser]
         B[Mobile App]
-￼
+![693A2AE1-F90D-438A-A731-8D7B1583A7BA](images/693A2AE1-F90D-438A-A731-8D7B1583A7BA.png)
         C[QR Code Scanner]
     end
 
@@ -160,7 +164,7 @@ graph TB
 3. Data Flow Sequences
 
 3.1 Voice Call Flow
-￼
+![25932A01-03E9-4EA6-B10A-7E23CFA208D8](images/25932A01-03E9-4EA6-B10A-7E23CFA208D8.png)
 ```mermaid
 sequenceDiagram
     participant U as User
