@@ -24,6 +24,9 @@ import KnowledgeUpload from "./pages/KnowledgeUpload";
 import AgentDashboard from "./pages/agent/Dashboard";
 import AgentCalls from "./pages/agent/Calls";
 import HandoffDetail from "./pages/agent/HandoffDetail";
+import Analytics from "./pages/Analytics";
+import AnalyticsCampaigns from "./pages/AnalyticsCampaigns";
+import AnalyticsCosts from "./pages/AnalyticsCosts";
 import DevDesignSystem from "./pages/DevDesignSystem";
 import NotFound from "./pages/NotFound";
 
@@ -176,6 +179,32 @@ const App = () => (
           element={
             <ProtectedRoute>
               <HandoffDetail />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Analytics - protected */}
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/campaigns"
+          element={
+            <ProtectedRoute>
+              <AnalyticsCampaigns />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics/costs"
+          element={
+            <ProtectedRoute>
+              <AnalyticsCosts />
             </ProtectedRoute>
           }
         />

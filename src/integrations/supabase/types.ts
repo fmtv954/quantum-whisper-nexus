@@ -683,6 +683,76 @@ export type Database = {
           },
         ]
       }
+      usage_events: {
+        Row: {
+          account_id: string
+          call_id: string | null
+          campaign_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          occurred_at: string
+          provider: string
+          service: string
+          total_cost_usd: number
+          unit_cost_usd: number
+          unit_type: string
+          units: number
+        }
+        Insert: {
+          account_id: string
+          call_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          provider: string
+          service: string
+          total_cost_usd: number
+          unit_cost_usd: number
+          unit_type: string
+          units: number
+        }
+        Update: {
+          account_id?: string
+          call_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          provider?: string
+          service?: string
+          total_cost_usd?: number
+          unit_cost_usd?: number
+          unit_type?: string
+          units?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_events_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_user_id: string | null

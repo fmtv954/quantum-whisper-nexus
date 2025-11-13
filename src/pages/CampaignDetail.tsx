@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Edit2, Save, X, Workflow, Upload, Users, QrCode } from "lucide-react";
+import { ArrowLeft, Edit2, Save, X, Workflow, Upload, Users, TrendingUp } from "lucide-react";
 import { getCurrentAccountId } from "@/lib/data";
 import { getCampaignById, updateCampaign, getRecentCallsForCampaign, type Campaign } from "@/lib/campaigns";
 import { formatRelativeTime, formatDuration } from "@/lib/data";
@@ -245,9 +245,11 @@ export default function CampaignDetail() {
             </Button>
           </Card>
           <Card className="p-4">
-            <Button variant="outline" className="w-full justify-start" disabled>
-              <QrCode className="mr-2 h-4 w-4" />
-              Generate QR Code
+            <Button variant="outline" className="w-full justify-start" asChild>
+              <Link to={`/analytics/campaigns?campaignId=${campaign.id}`}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Analytics
+              </Link>
             </Button>
           </Card>
         </div>

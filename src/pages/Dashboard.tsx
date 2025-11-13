@@ -193,13 +193,23 @@ export default function Dashboard() {
               Overview of your voice AI campaigns and activity
             </p>
           </div>
-          <Button 
-            onClick={() => navigate('/campaigns/new')}
-            className="bg-cyber-blue hover:bg-cyber-blue/90 text-background font-semibold glow-blue"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Campaign
-          </Button>
+          <div className="flex gap-3">
+            <Button 
+              onClick={() => navigate('/analytics')}
+              variant="outline"
+              className="gap-2"
+            >
+              <TrendingUp className="h-4 w-4" />
+              View Analytics
+            </Button>
+            <Button 
+              onClick={() => navigate('/campaigns/new')}
+              className="bg-cyber-blue hover:bg-cyber-blue/90 text-background font-semibold glow-blue"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Campaign
+            </Button>
+          </div>
         </div>
 
         {/* Metrics Grid */}
