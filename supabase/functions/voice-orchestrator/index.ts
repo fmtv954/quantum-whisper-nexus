@@ -5,13 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type VoiceMetadata = Record<string, unknown>;
+
 interface VoiceMessage {
   type: 'start_call' | 'audio_chunk' | 'user_audio' | 'user_text' | 'end_call';
   campaignId?: string;
   callId?: string;
   audioData?: string;
   text?: string;
-  context?: any;
+  context?: VoiceMetadata;
   accountId?: string;
   roomName?: string;
 }
@@ -21,12 +23,55 @@ interface ConversationContext {
   campaignId: string;
   accountId: string;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
-  metadata: any;
+  metadata: VoiceMetadata;
   deepgramWs?: WebSocket;
+  deepgramReady?: boolean;
+  pendingAudioChunks: Uint8Array[];
+  pendingAudioBytes: number;
   currentTranscript?: string;
 }
 
 const conversations = new Map<string, ConversationContext>();
+
+const MAX_PENDING_AUDIO_BYTES = 320_000; // ~10 seconds of mono 16kHz PCM audio
+
+function bufferPendingAudio(context: ConversationContext, chunk: Uint8Array) {
+  const chunkBytes = chunk.byteLength;
+  if (chunkBytes === 0) {
+    return;
+  }
+
+  if (chunkBytes >= MAX_PENDING_AUDIO_BYTES) {
+    console.warn(
+      `[WebSocket] Dropping oversized audio chunk (${chunkBytes} bytes) for call ${context.callId}`
+    );
+    return;
+  }
+
+  context.pendingAudioChunks.push(chunk);
+  context.pendingAudioBytes += chunkBytes;
+
+  let droppedBytes = 0;
+  while (context.pendingAudioBytes > MAX_PENDING_AUDIO_BYTES && context.pendingAudioChunks.length > 0) {
+    const dropped = context.pendingAudioChunks.shift();
+    if (!dropped) {
+      break;
+    }
+    droppedBytes += dropped.byteLength;
+    context.pendingAudioBytes -= dropped.byteLength;
+  }
+
+  if (droppedBytes > 0) {
+    console.warn(
+      `[WebSocket] Pending audio buffer limit reached for call ${context.callId}, dropped ${droppedBytes} bytes`
+    );
+  }
+}
+
+function clearPendingAudio(context: ConversationContext) {
+  context.pendingAudioChunks = [];
+  context.pendingAudioBytes = 0;
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -90,7 +135,7 @@ function handleWebSocket(req: Request): Response {
         case 'start_call': {
           const callId = crypto.randomUUID();
           currentCallId = callId;
-          
+
           // Initialize conversation context
           const context: ConversationContext = {
             callId,
@@ -98,16 +143,25 @@ function handleWebSocket(req: Request): Response {
             accountId: message.accountId!,
             history: [],
             metadata: { roomName: message.roomName },
+            deepgramReady: false,
+            pendingAudioChunks: [],
+            pendingAudioBytes: 0,
             currentTranscript: '',
           };
-          
-          // Initialize Deepgram STT WebSocket for 16kHz Opus audio from LiveKit
-          await initializeDeepgramSTT(context, socket);
-          
+
           conversations.set(callId, context);
 
+          try {
+            // Initialize Deepgram STT WebSocket for 16kHz Opus audio from LiveKit
+            await initializeDeepgramSTT(context, socket);
+          } catch (error) {
+            conversations.delete(callId);
+            currentCallId = null;
+            throw error;
+          }
+
           console.log(`[WebSocket] Started call ${callId} with LiveKit room: ${message.roomName}`);
-          
+
           socket.send(JSON.stringify({
             type: 'call_started',
             callId,
@@ -117,35 +171,52 @@ function handleWebSocket(req: Request): Response {
         }
 
         case 'audio_chunk': {
-          // Audio chunks from LiveKit client (16kHz Opus encoded as base64)
-          if (!currentCallId) {
+          // Audio chunks from LiveKit client (16kHz PCM encoded as base64)
+          const callId = message.callId ?? currentCallId;
+          if (!callId) {
             throw new Error('No active call');
           }
 
-          const context = conversations.get(currentCallId);
-          if (!context) {
-            throw new Error(`Call ${currentCallId} not found`);
+          if (!currentCallId) {
+            currentCallId = callId;
+          } else if (message.callId && message.callId !== currentCallId) {
+            console.warn(`[WebSocket] Received audio for call ${message.callId} while tracking ${currentCallId}, switching context`);
+            currentCallId = message.callId;
           }
 
-          // Forward audio chunk to Deepgram STT (expecting 16kHz Opus from LiveKit)
-          if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
-            // Decode base64 audio data (16kHz Opus from LiveKit)
-            const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
+          const context = conversations.get(callId);
+          if (!context) {
+            throw new Error(`Call ${callId} not found`);
+          }
+
+          // Forward audio chunk to Deepgram STT (expecting 16kHz linear PCM)
+          const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
+
+          if (context.deepgramReady && context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
             context.deepgramWs.send(audioBytes);
           } else {
-            console.warn(`[WebSocket] Deepgram not ready for call ${currentCallId}`);
+            console.warn(`[WebSocket] Deepgram not ready for call ${callId}, buffering ${audioBytes.byteLength} bytes`);
+            bufferPendingAudio(context, audioBytes);
           }
           break;
         }
 
         case 'user_text': {
-          if (!currentCallId) {
+          const callId = message.callId ?? currentCallId;
+          if (!callId) {
             throw new Error('No active call');
           }
 
-          const context = conversations.get(currentCallId);
+          if (!currentCallId) {
+            currentCallId = callId;
+          } else if (message.callId && message.callId !== currentCallId) {
+            console.warn(`[WebSocket] Received text for call ${message.callId} while tracking ${currentCallId}, switching context`);
+            currentCallId = message.callId;
+          }
+
+          const context = conversations.get(callId);
           if (!context) {
-            throw new Error(`Call ${currentCallId} not found`);
+            throw new Error(`Call ${callId} not found`);
           }
 
           // Send transcript to client
@@ -157,7 +228,7 @@ function handleWebSocket(req: Request): Response {
 
           // Process with AI
           const aiResponse = await processWithAI(message.text!, context);
-          
+
           // Send AI transcript
           socket.send(JSON.stringify({
             type: 'transcript',
@@ -165,33 +236,36 @@ function handleWebSocket(req: Request): Response {
             speaker: 'assistant'
           }));
 
-          // Generate and send audio response
-          const audioResponse = await synthesizeSpeech(aiResponse);
-          socket.send(JSON.stringify({
-            type: 'audio_response',
-            audioData: audioResponse
-          }));
+          await sendAssistantAudio(socket, aiResponse);
           break;
         }
 
         case 'end_call': {
-          if (currentCallId) {
-            const context = conversations.get(currentCallId);
-            
+          const callId = message.callId ?? currentCallId;
+          if (callId) {
+            const context = conversations.get(callId);
+
             // Close Deepgram WebSocket
             if (context?.deepgramWs) {
               context.deepgramWs.close();
             }
-            
-            conversations.delete(currentCallId);
-            console.log(`[WebSocket] Ended call ${currentCallId}`);
-            
+
+            if (context) {
+              clearPendingAudio(context);
+              context.deepgramReady = false;
+            }
+
+            conversations.delete(callId);
+            console.log(`[WebSocket] Ended call ${callId}`);
+
             socket.send(JSON.stringify({
               type: 'call_ended',
-              callId: currentCallId
+              callId
             }));
-            
-            currentCallId = null;
+
+            if (!message.callId || message.callId === currentCallId) {
+              currentCallId = null;
+            }
           }
           break;
         }
@@ -219,6 +293,10 @@ function handleWebSocket(req: Request): Response {
       if (context?.deepgramWs) {
         context.deepgramWs.close();
       }
+      if (context) {
+        clearPendingAudio(context);
+        context.deepgramReady = false;
+      }
       conversations.delete(currentCallId);
     }
   };
@@ -226,7 +304,7 @@ function handleWebSocket(req: Request): Response {
   return response;
 }
 
-// ==================== Deepgram STT Streaming (16kHz Opus) ====================
+// ==================== Deepgram STT Streaming (16kHz PCM) ====================
 
 async function initializeDeepgramSTT(context: ConversationContext, clientSocket: WebSocket) {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
@@ -235,12 +313,12 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     throw new Error('DEEPGRAM_API_KEY not configured');
   }
 
-  // Updated to 16kHz Opus to match LiveKit audio
+  // Updated to 16kHz linear PCM to match browser stream
   const deepgramUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
     model: 'nova-2',
     punctuate: 'true',
     interim_results: 'true',
-    encoding: 'opus', // Opus encoding from LiveKit
+    encoding: 'linear16', // 16-bit PCM from browser stream
     sample_rate: '16000', // 16kHz as per spec
     channels: '1',
   });
@@ -255,6 +333,20 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
 
   deepgramWs.onopen = () => {
     console.log(`[Deepgram STT] Connected for call ${context.callId}`);
+    context.deepgramReady = true;
+
+    if (context.pendingAudioChunks.length) {
+      console.log(`[Deepgram STT] Flushing ${context.pendingAudioChunks.length} buffered chunks for call ${context.callId}`);
+      while (context.pendingAudioChunks.length) {
+        const chunk = context.pendingAudioChunks.shift();
+        if (!chunk) {
+          break;
+        }
+        context.pendingAudioBytes = Math.max(0, context.pendingAudioBytes - chunk.byteLength);
+        deepgramWs.send(chunk);
+      }
+      context.pendingAudioBytes = 0;
+    }
   };
 
   deepgramWs.onmessage = async (event) => {
@@ -282,20 +374,15 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
             
             // Process with AI and generate response
             const aiResponse = await processWithAI(transcript, context);
-            
+
             // Send AI transcript
             clientSocket.send(JSON.stringify({
               type: 'transcript',
               text: aiResponse,
               speaker: 'assistant',
             }));
-            
-            // Generate and send audio response
-            const audioResponse = await synthesizeSpeech(aiResponse);
-            clientSocket.send(JSON.stringify({
-              type: 'audio_response',
-              audioData: audioResponse,
-            }));
+
+            await sendAssistantAudio(clientSocket, aiResponse);
           }
         }
       } else if (data.type === 'Metadata') {
@@ -312,10 +399,13 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
 
   deepgramWs.onclose = () => {
     console.log(`[Deepgram STT] Disconnected for call ${context.callId}`);
+    context.deepgramReady = false;
+    clearPendingAudio(context);
   };
 
   context.deepgramWs = deepgramWs;
-  
+  context.deepgramReady = deepgramWs.readyState === WebSocket.OPEN;
+
   // Wait for connection to open
   await new Promise((resolve) => {
     if (deepgramWs.readyState === WebSocket.OPEN) {
@@ -324,11 +414,24 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
       deepgramWs.addEventListener('open', () => resolve(null), { once: true });
     }
   });
+
+  if (context.deepgramReady && context.pendingAudioChunks.length) {
+    console.log(`[Deepgram STT] Flushing buffered chunks post-connect for call ${context.callId}`);
+    while (context.pendingAudioChunks.length) {
+      const chunk = context.pendingAudioChunks.shift();
+      if (!chunk) {
+        break;
+      }
+      context.pendingAudioBytes = Math.max(0, context.pendingAudioBytes - chunk.byteLength);
+      deepgramWs.send(chunk);
+    }
+    context.pendingAudioBytes = 0;
+  }
 }
 
 // ==================== HTTP Handlers (Legacy) ====================
 
-async function handleStartCall(campaignId: string, context: any) {
+async function handleStartCall(campaignId: string, context: VoiceMetadata = {}) {
   const callId = crypto.randomUUID();
   
   // Initialize conversation context
@@ -338,6 +441,10 @@ async function handleStartCall(campaignId: string, context: any) {
     accountId: context.accountId,
     history: [],
     metadata: context,
+    deepgramReady: false,
+    pendingAudioChunks: [],
+    pendingAudioBytes: 0,
+    currentTranscript: '',
   });
 
   console.log(`[Voice Orchestrator] Started call ${callId} for campaign ${campaignId}`);
@@ -425,6 +532,7 @@ async function handleEndCall(callId: string) {
   console.log(`[Voice Orchestrator] Ending call ${callId}`);
 
   // Clean up conversation context
+  clearPendingAudio(context);
   conversations.delete(callId);
 
   return new Response(
@@ -472,24 +580,26 @@ async function searchWeb(query: string): Promise<string> {
     const searchResults = result.results || [];
     if (searchResults.length === 0) return '';
 
-    return `Search Results:\n${searchResults.map((r: any) => `- ${r.title}: ${r.content}`).join('\n')}`;
+    return `Search Results:\n${searchResults
+      .map((r: { title: string; content: string }) => `- ${r.title}: ${r.content}`)
+      .join('\n')}`;
   } catch {
     return '';
   }
 }
 
 async function processWithAI(userMessage: string, context: ConversationContext): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) {
-    throw new Error('LOVABLE_API_KEY not configured');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY not configured');
   }
 
-  // Add user message to history
+  // Add user message to history for context preservation
   context.history.push({ role: 'user', content: userMessage });
 
   // Detect if search is needed (simple keyword detection)
   const searchKeywords = ['search', 'find', 'look up', 'what is', 'who is', 'when', 'where', 'how'];
-  const needsSearch = searchKeywords.some(keyword => 
+  const needsSearch = searchKeywords.some((keyword) =>
     userMessage.toLowerCase().includes(keyword)
   );
 
@@ -500,34 +610,39 @@ async function processWithAI(userMessage: string, context: ConversationContext):
     searchContext = await searchWeb(userMessage);
   }
 
-  // Build system prompt with RAG context
   const systemPrompt = buildSystemPrompt(context, searchContext);
 
-  // Call Lovable AI (Gemini)
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...context.history.slice(-10),
+  ];
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...context.history.slice(-10), // Keep last 10 messages for context
-      ],
-      max_tokens: 150,
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 300,
+      temperature: 0.7,
     }),
   });
 
   if (!response.ok) {
     const error = await response.text();
     console.error('[LLM Error]', error);
-    throw new Error(`Lovable AI failed: ${response.status}`);
+    throw new Error(`OpenAI chat completion failed: ${response.status}`);
   }
 
   const result = await response.json();
-  const aiResponse = result.choices[0].message.content;
+  const aiResponse = result.choices?.[0]?.message?.content ?? '';
+
+  if (!aiResponse) {
+    throw new Error('OpenAI returned an empty response');
+  }
 
   // Add AI response to history
   context.history.push({ role: 'assistant', content: aiResponse });
@@ -539,7 +654,7 @@ async function synthesizeSpeech(text: string): Promise<string> {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
   if (!DEEPGRAM_API_KEY) throw new Error('DEEPGRAM_API_KEY not configured');
 
-  const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
+  const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en&encoding=linear16&sample_rate=16000', {
     method: 'POST',
     headers: { 'Authorization': `Token ${DEEPGRAM_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -548,6 +663,28 @@ async function synthesizeSpeech(text: string): Promise<string> {
   if (!response.ok) throw new Error(`Deepgram TTS failed: ${response.status}`);
   const audioBuffer = await response.arrayBuffer();
   return btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+}
+
+async function sendAssistantAudio(socket: WebSocket, text: string) {
+  socket.send(JSON.stringify({
+    type: 'ai_speaking',
+    speaking: true,
+  }));
+
+  try {
+    const audioResponse = await synthesizeSpeech(text);
+    socket.send(JSON.stringify({
+      type: 'audio_response',
+      audioData: audioResponse,
+      encoding: 'linear16',
+      sampleRate: 16000,
+    }));
+  } finally {
+    socket.send(JSON.stringify({
+      type: 'ai_speaking',
+      speaking: false,
+    }));
+  }
 }
 
 function buildSystemPrompt(context: ConversationContext, searchContext?: string): string {
@@ -566,5 +703,5 @@ async function trackUsage(callId: string, usage: { sttDuration: number; llmToken
   const totalCost = sttCost + llmCost + ttsCost;
 
   console.log(`[Usage] Call ${callId} - STT: ${usage.sttDuration}s, LLM: ${usage.llmTokens} tokens, TTS: ${usage.ttsCharacters} chars`);
-  console.log(`[Cost] STT: $${sttCost.toFixed(6)}, LLM (Gemini): $${llmCost.toFixed(6)}, TTS: $${ttsCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
+  console.log(`[Cost] STT: $${sttCost.toFixed(6)}, LLM (OpenAI): $${llmCost.toFixed(6)}, TTS: $${ttsCost.toFixed(6)}, Total: $${totalCost.toFixed(6)}`);
 }
