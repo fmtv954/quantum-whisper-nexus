@@ -368,6 +368,10 @@ export default function Call() {
             handoff.status === "cancelled" ? "warning" : "info",
           );
         },
+        onDeepgramReady: () => {
+          setAiCanHear(true);
+          logDiagnostic("Deepgram", "STT ready - AI can now hear you", "info");
+        },
       });
 
       voiceOrchestratorRef.current = orchestrator;
