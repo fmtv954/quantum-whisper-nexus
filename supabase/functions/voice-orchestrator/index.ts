@@ -23,10 +23,101 @@ interface ConversationContext {
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   metadata: any;
   deepgramWs?: WebSocket;
+  deepgramReady?: boolean;
+  deepgramReconnectAttempts?: number;
+  deepgramReconnectTimer?: ReturnType<typeof setTimeout>;
+  pendingAudioChunks?: Uint8Array[];
+  pendingAudioBytes?: number;
+  droppedAudioChunks?: number;
   currentTranscript?: string;
 }
 
+const MAX_PENDING_AUDIO_CHUNKS = 120; // approximately 4 seconds @ 30 fps microphone cadence
+const MAX_PENDING_AUDIO_BYTES = 2 * 1024 * 1024; // 2MB of PCM (~60 seconds @ 32kbps)
+const MAX_DEEPGRAM_RECONNECTS = 5;
+
 const conversations = new Map<string, ConversationContext>();
+
+function queuePendingAudio(context: ConversationContext, chunk: Uint8Array) {
+  context.pendingAudioChunks = context.pendingAudioChunks ?? [];
+  context.pendingAudioBytes = context.pendingAudioBytes ?? 0;
+  context.droppedAudioChunks = context.droppedAudioChunks ?? 0;
+
+  context.pendingAudioChunks.push(chunk);
+  context.pendingAudioBytes += chunk.byteLength;
+
+  while (
+    context.pendingAudioChunks.length > MAX_PENDING_AUDIO_CHUNKS ||
+    (context.pendingAudioBytes ?? 0) > MAX_PENDING_AUDIO_BYTES
+  ) {
+    const dropped = context.pendingAudioChunks.shift();
+    if (!dropped) break;
+    context.pendingAudioBytes -= dropped.byteLength;
+    context.droppedAudioChunks += 1;
+  }
+}
+
+function flushPendingAudio(context: ConversationContext) {
+  const ws = context.deepgramWs;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  const queued = context.pendingAudioChunks?.splice(0) ?? [];
+  if (!queued.length) {
+    context.pendingAudioBytes = 0;
+    return;
+  }
+
+  for (const chunk of queued) {
+    try {
+      ws.send(chunk);
+    } catch (error) {
+      console.error('[Deepgram STT] Failed to send queued chunk:', error);
+      queuePendingAudio(context, chunk);
+      break;
+    }
+  }
+
+  if (context.pendingAudioChunks && context.pendingAudioChunks.length === 0) {
+    context.pendingAudioBytes = 0;
+  }
+}
+
+function scheduleDeepgramReconnect(
+  context: ConversationContext,
+  clientSocket: WebSocket,
+  reason: string
+) {
+  context.deepgramReady = false;
+  context.deepgramWs = undefined;
+
+  const attempts = (context.deepgramReconnectAttempts ?? 0) + 1;
+  context.deepgramReconnectAttempts = attempts;
+
+  if (attempts > MAX_DEEPGRAM_RECONNECTS) {
+    console.error(
+      `[Deepgram STT] Reconnect limit reached for call ${context.callId}. Reason: ${reason}`
+    );
+    return;
+  }
+
+  const delay = Math.min(5000, 500 * 2 ** (attempts - 1));
+  console.warn(
+    `[Deepgram STT] Scheduling reconnect #${attempts} for call ${context.callId} in ${delay}ms. Reason: ${reason}`
+  );
+
+  if (context.deepgramReconnectTimer) {
+    clearTimeout(context.deepgramReconnectTimer);
+  }
+
+  context.deepgramReconnectTimer = setTimeout(() => {
+    if (!conversations.has(context.callId)) {
+      return;
+    }
+    initializeDeepgramSTT(context, clientSocket).catch((error) => {
+      console.error('[Deepgram STT] Reconnect failed:', error);
+    });
+  }, delay);
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -98,9 +189,14 @@ function handleWebSocket(req: Request): Response {
             accountId: message.accountId!,
             history: [],
             metadata: { roomName: message.roomName },
+            deepgramReady: false,
+            deepgramReconnectAttempts: 0,
+            pendingAudioChunks: [],
+            pendingAudioBytes: 0,
+            droppedAudioChunks: 0,
             currentTranscript: '',
           };
-          
+
           // Initialize Deepgram STT WebSocket for 16kHz Opus audio from LiveKit
           await initializeDeepgramSTT(context, socket);
           
@@ -128,12 +224,17 @@ function handleWebSocket(req: Request): Response {
           }
 
           // Forward audio chunk to Deepgram STT (expecting 16kHz linear PCM)
-          if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
-            // Decode base64 audio data (16kHz PCM little-endian)
-            const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
+          const audioBytes = Uint8Array.from(atob(message.audioData!), (c) => c.charCodeAt(0));
+
+          if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN && context.deepgramReady) {
             context.deepgramWs.send(audioBytes);
           } else {
-            console.warn(`[WebSocket] Deepgram not ready for call ${currentCallId}`);
+            queuePendingAudio(context, audioBytes);
+            if (!context.deepgramReady) {
+              const bufferedChunks = context.pendingAudioChunks?.length ?? 0;
+              const droppedChunks = context.droppedAudioChunks ?? 0;
+              console.warn(`[WebSocket] Deepgram not ready for call ${currentCallId}; queued chunk (${bufferedChunks} buffered, ${droppedChunks} dropped)`);
+            }
           }
           break;
         }
@@ -177,15 +278,25 @@ function handleWebSocket(req: Request): Response {
         case 'end_call': {
           if (currentCallId) {
             const context = conversations.get(currentCallId);
-            
+
             // Close Deepgram WebSocket
             if (context?.deepgramWs) {
               context.deepgramWs.close();
             }
-            
+
+            if (context?.deepgramReconnectTimer) {
+              clearTimeout(context.deepgramReconnectTimer);
+              context.deepgramReconnectTimer = undefined;
+            }
+
+            if (context) {
+              context.pendingAudioChunks = [];
+              context.pendingAudioBytes = 0;
+            }
+
             conversations.delete(currentCallId);
             console.log(`[WebSocket] Ended call ${currentCallId}`);
-            
+
             socket.send(JSON.stringify({
               type: 'call_ended',
               callId: currentCallId
@@ -219,6 +330,14 @@ function handleWebSocket(req: Request): Response {
       if (context?.deepgramWs) {
         context.deepgramWs.close();
       }
+      if (context?.deepgramReconnectTimer) {
+        clearTimeout(context.deepgramReconnectTimer);
+        context.deepgramReconnectTimer = undefined;
+      }
+      if (context) {
+        context.pendingAudioChunks = [];
+        context.pendingAudioBytes = 0;
+      }
       conversations.delete(currentCallId);
     }
   };
@@ -235,6 +354,12 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     throw new Error('DEEPGRAM_API_KEY not configured');
   }
 
+  context.deepgramReady = false;
+  if (context.deepgramReconnectTimer) {
+    clearTimeout(context.deepgramReconnectTimer);
+    context.deepgramReconnectTimer = undefined;
+  }
+
   // Updated to 16kHz linear PCM to match browser stream
   const deepgramUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
     model: 'nova-2',
@@ -246,15 +371,27 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
   });
 
   console.log(`[Deepgram STT] Connecting for call ${context.callId}...`);
-  
+
   const deepgramWs = new WebSocket(deepgramUrl, {
     headers: {
       'Authorization': `Token ${DEEPGRAM_API_KEY}`,
     },
   });
 
+  context.deepgramWs = deepgramWs;
+
   deepgramWs.onopen = () => {
     console.log(`[Deepgram STT] Connected for call ${context.callId}`);
+    context.deepgramReady = true;
+    context.deepgramReconnectAttempts = 0;
+    flushPendingAudio(context);
+
+    if ((context.droppedAudioChunks ?? 0) > 0) {
+      console.warn(
+        `[Deepgram STT] Dropped ${context.droppedAudioChunks} queued chunk(s) before connection for call ${context.callId}`
+      );
+      context.droppedAudioChunks = 0;
+    }
   };
 
   deepgramWs.onmessage = async (event) => {
@@ -310,12 +447,21 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     console.error(`[Deepgram STT] Error for call ${context.callId}:`, error);
   };
 
-  deepgramWs.onclose = () => {
-    console.log(`[Deepgram STT] Disconnected for call ${context.callId}`);
+  deepgramWs.onclose = (event) => {
+    context.deepgramReady = false;
+    console.log(
+      `[Deepgram STT] Disconnected for call ${context.callId} (code ${event.code}${event.reason ? `, reason: ${event.reason}` : ''})`
+    );
+
+    if (!conversations.has(context.callId)) {
+      return;
+    }
+
+    if (event.code !== 1000) {
+      scheduleDeepgramReconnect(context, clientSocket, event.reason || `code ${event.code}`);
+    }
   };
 
-  context.deepgramWs = deepgramWs;
-  
   // Wait for connection to open
   await new Promise((resolve) => {
     if (deepgramWs.readyState === WebSocket.OPEN) {
@@ -338,6 +484,11 @@ async function handleStartCall(campaignId: string, context: any) {
     accountId: context.accountId,
     history: [],
     metadata: context,
+    deepgramReady: false,
+    deepgramReconnectAttempts: 0,
+    pendingAudioChunks: [],
+    pendingAudioBytes: 0,
+    droppedAudioChunks: 0,
   });
 
   console.log(`[Voice Orchestrator] Started call ${callId} for campaign ${campaignId}`);
@@ -425,6 +576,15 @@ async function handleEndCall(callId: string) {
   console.log(`[Voice Orchestrator] Ending call ${callId}`);
 
   // Clean up conversation context
+  if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
+    context.deepgramWs.close();
+  }
+  if (context.deepgramReconnectTimer) {
+    clearTimeout(context.deepgramReconnectTimer);
+    context.deepgramReconnectTimer = undefined;
+  }
+  context.pendingAudioChunks = [];
+  context.pendingAudioBytes = 0;
   conversations.delete(callId);
 
   return new Response(
