@@ -1,9 +1,5 @@
-# V2 Document 5.2: Admin Dashboard Specification
+V2 Document 5.2 Admin Dashboard Specification
 
-# **V2**  <span style="font-family: .SFUI-Regular; font-size: 17.0;">
-     Document 5.2: Admin Dashboard Specification
-
- </span>
 CONTEXT
 
 Following the Leads Management API, we need to design and implement the admin dashboard that provides real-time analytics, lead management, and system monitoring for business users.

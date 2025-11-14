@@ -11,7 +11,6 @@ import {
   RemoteAudioTrack,
   createLocalAudioTrack,
   AudioCaptureOptions,
-  LocalAudioTrack,
 } from 'livekit-client';
 
 export interface LiveKitCallbacks {
@@ -24,7 +23,7 @@ export interface LiveKitCallbacks {
 
 export class LiveKitManager {
   private room: Room | null = null;
-  private localAudioTrack: LocalAudioTrack | null = null;
+  private localAudioTrack: any = null;
   private callbacks: LiveKitCallbacks;
 
   constructor(callbacks: LiveKitCallbacks) {
@@ -178,12 +177,5 @@ export class LiveKitManager {
    */
   getConnectionState(): string {
     return this.room?.state ?? 'disconnected';
-  }
-
-  /**
-   * Returns the underlying MediaStreamTrack for local microphone publishing
-   */
-  getLocalMediaStreamTrack(): MediaStreamTrack | null {
-    return this.localAudioTrack?.mediaStreamTrack ?? null;
   }
 }

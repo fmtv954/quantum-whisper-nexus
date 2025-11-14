@@ -117,7 +117,7 @@ function handleWebSocket(req: Request): Response {
         }
 
         case 'audio_chunk': {
-          // Audio chunks from LiveKit client (16kHz PCM encoded as base64)
+          // Audio chunks from LiveKit client (16kHz Opus encoded as base64)
           if (!currentCallId) {
             throw new Error('No active call');
           }
@@ -127,9 +127,9 @@ function handleWebSocket(req: Request): Response {
             throw new Error(`Call ${currentCallId} not found`);
           }
 
-          // Forward audio chunk to Deepgram STT (expecting 16kHz linear PCM)
+          // Forward audio chunk to Deepgram STT (expecting 16kHz Opus from LiveKit)
           if (context.deepgramWs && context.deepgramWs.readyState === WebSocket.OPEN) {
-            // Decode base64 audio data (16kHz PCM little-endian)
+            // Decode base64 audio data (16kHz Opus from LiveKit)
             const audioBytes = Uint8Array.from(atob(message.audioData!), c => c.charCodeAt(0));
             context.deepgramWs.send(audioBytes);
           } else {
@@ -226,7 +226,7 @@ function handleWebSocket(req: Request): Response {
   return response;
 }
 
-// ==================== Deepgram STT Streaming (16kHz PCM) ====================
+// ==================== Deepgram STT Streaming (16kHz Opus) ====================
 
 async function initializeDeepgramSTT(context: ConversationContext, clientSocket: WebSocket) {
   const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
@@ -235,12 +235,12 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     throw new Error('DEEPGRAM_API_KEY not configured');
   }
 
-  // Updated to 16kHz linear PCM to match browser stream
+  // Updated to 16kHz Opus to match LiveKit audio
   const deepgramUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
     model: 'nova-2',
     punctuate: 'true',
     interim_results: 'true',
-    encoding: 'linear16', // 16-bit PCM from browser stream
+    encoding: 'opus', // Opus encoding from LiveKit
     sample_rate: '16000', // 16kHz as per spec
     channels: '1',
   });

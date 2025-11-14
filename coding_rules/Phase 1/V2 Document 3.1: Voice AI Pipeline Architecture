@@ -1,9 +1,5 @@
-# V2 Document 3.1: Voice AI Pipeline Architecture
+V2 Document 3.1: Voice AI Pipeline Architecture
 
-# **V2**  <span style="font-family: .SFUI-Regular; font-size: 17.0;">
-     Document 3.1: Voice AI Pipeline Architecture
-
- </span>
 CONTEXT
 
 Following the Tech Stack Specification, we need to implement the core voice AI pipeline that powers our conversational platform. This document details the real-time audio processing, AI model orchestration, and cost-optimized routing.
@@ -571,7 +567,7 @@ export class ScalingManager {
 Concurrent Calls Target Latency Max Cost/Minute Required Infrastructure
 1-50 <80ms $0.031 Single Vercel + Supabase Starter
 50-500 <90ms $0.028 Vercel + LiveKit Dedicated
-[500-5000](tel:500-5000) <100ms $0.025 Multi-region + Redis Cluster
+500-5000 <100ms $0.025 Multi-region + Redis Cluster
 5000+ <120ms $0.022 Global CDN + AI Load Balancer
 
 ---
