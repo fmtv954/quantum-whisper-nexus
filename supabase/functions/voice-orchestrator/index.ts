@@ -335,6 +335,12 @@ async function initializeDeepgramSTT(context: ConversationContext, clientSocket:
     console.log(`[Deepgram STT] Connected for call ${context.callId}`);
     context.deepgramReady = true;
 
+    // Notify client that Deepgram is ready
+    clientSocket.send(JSON.stringify({
+      type: 'deepgram_ready',
+      callId: context.callId,
+    }));
+
     if (context.pendingAudioChunks.length) {
       console.log(`[Deepgram STT] Flushing ${context.pendingAudioChunks.length} buffered chunks for call ${context.callId}`);
       while (context.pendingAudioChunks.length) {
@@ -438,7 +444,7 @@ async function handleStartCall(campaignId: string, context: VoiceMetadata = {}) 
   conversations.set(callId, {
     callId,
     campaignId,
-    accountId: context.accountId,
+    accountId: (context.accountId as string) || 'unknown',
     history: [],
     metadata: context,
     deepgramReady: false,

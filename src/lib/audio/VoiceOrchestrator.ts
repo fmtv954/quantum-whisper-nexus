@@ -14,10 +14,12 @@ export interface VoiceOrchestratorCallbacks {
   onLocalAudioLevel?: (level: number) => void;
   onSignalingStatus?: (status: 'connecting' | 'connected' | 'disconnected') => void;
   onHandoffUpdate?: (payload: { status: 'requested' | 'assigned' | 'completed' | 'cancelled'; reason?: string; handoffId?: string }) => void;
+  onDeepgramReady?: () => void;
 }
 
 type OrchestratorServerMessage =
   | { type: 'call_started'; callId: string }
+  | { type: 'deepgram_ready'; callId: string }
   | { type: 'transcript'; text: string; speaker: 'user' | 'assistant'; isFinal?: boolean }
   | { type: 'ai_speaking'; speaking: boolean }
   | { type: 'error'; error: string }
@@ -133,6 +135,11 @@ export class VoiceOrchestrator {
           console.error('[VoiceOrchestrator] Failed to start audio streaming:', error);
           this.callbacks.onError(error as Error);
         });
+        break;
+
+      case 'deepgram_ready':
+        console.log('[VoiceOrchestrator] Deepgram STT is ready');
+        this.callbacks.onDeepgramReady?.();
         break;
 
       case 'transcript':
@@ -317,7 +324,7 @@ export class VoiceOrchestrator {
         return;
       }
 
-      const base64 = VoiceOrchestrator.bufferToBase64(pcm.buffer);
+      const base64 = VoiceOrchestrator.bufferToBase64(pcm.buffer as ArrayBuffer);
 
       try {
         this.ws.send(
@@ -426,7 +433,8 @@ export class VoiceOrchestrator {
       }
 
       const audioBuffer = context.createBuffer(1, floatData.length, sampleRate);
-      audioBuffer.copyToChannel(floatData, 0);
+      const floatArray = new Float32Array(floatData.buffer as ArrayBuffer, floatData.byteOffset, floatData.length);
+      audioBuffer.copyToChannel(floatArray, 0);
 
       const source = context.createBufferSource();
       source.buffer = audioBuffer;
