@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Edit2, Save, X, Workflow, Upload, Users, TrendingUp } from "lucide-react";
+import { ArrowLeft, Edit2, Save, X, Workflow, Upload, Users, TrendingUp, Phone } from "lucide-react";
 import { getCurrentAccountId } from "@/lib/data";
 import { getCampaignById, updateCampaign, updateCampaignStatus, getRecentCallsForCampaign, type Campaign } from "@/lib/campaigns";
 import { formatRelativeTime, formatDuration } from "@/lib/data";
@@ -245,6 +245,24 @@ export default function CampaignDetail() {
             )}
           </div>
         </div>
+
+        {/* Test Call - Primary Action */}
+        <Card className="p-6 border-primary bg-primary/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Test Your AI Agent</h3>
+              <p className="text-sm text-muted-foreground">
+                Try a live call to experience your campaign
+              </p>
+            </div>
+            <Button size="lg" asChild className="gap-2">
+              <Link to={`/call/${campaign.id}`}>
+                <Phone className="h-5 w-5" />
+                Start Test Call
+              </Link>
+            </Button>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-4">
