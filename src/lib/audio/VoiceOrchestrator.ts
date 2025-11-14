@@ -11,6 +11,9 @@ export interface VoiceOrchestratorCallbacks {
   onTranscript: (text: string, speaker: 'user' | 'assistant', isFinal: boolean) => void;
   onError: (error: Error) => void;
   onSpeakingChange: (speaking: boolean) => void;
+  onLocalAudioLevel?: (level: number) => void;
+  onSignalingStatus?: (status: 'connecting' | 'connected' | 'disconnected') => void;
+  onHandoffUpdate?: (payload: { status: 'requested' | 'assigned' | 'completed' | 'cancelled'; reason?: string; handoffId?: string }) => void;
 }
 
 type OrchestratorServerMessage =
@@ -19,6 +22,7 @@ type OrchestratorServerMessage =
   | { type: 'ai_speaking'; speaking: boolean }
   | { type: 'error'; error: string }
   | { type: 'audio_response'; audioData: string; encoding?: string; sampleRate?: number }
+  | { type: 'handoff'; status: 'requested' | 'assigned' | 'completed' | 'cancelled'; reason?: string; handoffId?: string }
   | { type: 'keepalive' };
 
 export class VoiceOrchestrator {
@@ -77,10 +81,12 @@ export class VoiceOrchestrator {
       const wsUrl = `${import.meta.env.VITE_SUPABASE_URL.replace('http', 'ws')}/functions/v1/voice-orchestrator`;
       
       console.log('[VoiceOrchestrator] Opening WebSocket for signaling');
+      this.callbacks.onSignalingStatus?.('connecting');
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         console.log('[VoiceOrchestrator] WebSocket signaling connected');
+        this.callbacks.onSignalingStatus?.('connected');
 
         const startMessage = {
           type: 'start_call',
@@ -100,6 +106,7 @@ export class VoiceOrchestrator {
       this.ws.onerror = (error) => {
         console.error('[VoiceOrchestrator] WebSocket error:', error);
         this.callbacks.onError(new Error('WebSocket signaling failed'));
+        this.callbacks.onSignalingStatus?.('disconnected');
       };
 
       this.ws.onclose = () => {
@@ -107,6 +114,7 @@ export class VoiceOrchestrator {
         this.stopStreamingLocalAudio();
         this.stopAssistantPlayback();
         this.callId = null;
+        this.callbacks.onSignalingStatus?.('disconnected');
       };
 
     } catch (error) {
@@ -151,6 +159,14 @@ export class VoiceOrchestrator {
             message.encoding ?? 'linear16'
           );
         }
+        break;
+
+      case 'handoff':
+        this.callbacks.onHandoffUpdate?.({
+          status: message.status,
+          reason: message.reason,
+          handoffId: message.handoffId,
+        });
         break;
     }
   }
@@ -279,6 +295,16 @@ export class VoiceOrchestrator {
       const floatData = event.inputBuffer.getChannelData(0);
       if (!floatData || floatData.length === 0) {
         return;
+      }
+
+      if (this.callbacks.onLocalAudioLevel) {
+        let sum = 0;
+        for (let i = 0; i < floatData.length; i++) {
+          const sample = floatData[i];
+          sum += sample * sample;
+        }
+        const rms = Math.sqrt(sum / floatData.length);
+        this.callbacks.onLocalAudioLevel(Math.min(1, rms));
       }
 
       const pcm = VoiceOrchestrator.convertToPCM16(
