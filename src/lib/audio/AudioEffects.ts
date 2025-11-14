@@ -10,44 +10,35 @@ export const playPhoneRing = (minimumDurationMs = 3000): Promise<void> => {
     const ringAudio = new Audio('/audio/phone-ring.mp3');
     ringAudio.loop = true;
 
-    let resolved = false;
-    let minimumTimerComplete = minimumDurationMs === 0;
-    const cleanupAndResolve = () => {
-      if (resolved) return;
-      resolved = true;
-
+    const cleanup = () => {
       try {
         ringAudio.pause();
+        ringAudio.currentTime = 0;
       } catch (error) {
-        console.warn('Failed to pause phone ring audio on cleanup:', error);
+        console.warn('Failed to stop phone ring:', error);
       }
+    };
 
+    // Stop after minimum duration
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, minimumDurationMs);
+
+    // Handle errors
+    ringAudio.onerror = () => {
+      console.error('Error playing phone ring');
+      clearTimeout(timer);
+      cleanup();
       resolve();
     };
 
-    if (minimumDurationMs > 0) {
-      window.setTimeout(() => {
-        minimumTimerComplete = true;
-        if (ringAudio.ended || ringAudio.paused) {
-          cleanupAndResolve();
-        }
-      }, minimumDurationMs);
-    }
-
-    ringAudio.onended = () => {
-      if (minimumTimerComplete) {
-        cleanupAndResolve();
-      }
-    };
-
-    ringAudio.onerror = () => {
-      console.error('Error playing phone ring');
-      cleanupAndResolve();
-    };
-
+    // Start playing
     ringAudio.play().catch(err => {
       console.error('Failed to play phone ring:', err);
-      cleanupAndResolve();
+      clearTimeout(timer);
+      cleanup();
+      resolve();
     });
   });
 };
