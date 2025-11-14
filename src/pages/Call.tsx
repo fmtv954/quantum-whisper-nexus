@@ -3,9 +3,9 @@
  * Phase 1: OpenAI Realtime API with WebRTC
  */
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,22 @@ interface Message {
   timestamp: Date;
 }
 
+interface DiagnosticEvent {
+  id: string;
+  timestamp: Date;
+  source: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+}
+
+interface StreamingTranscript {
+  id: string;
+  speaker: "user" | "assistant";
+  text: string;
+  isFinal: boolean;
+  timestamp: Date;
+}
+
 export default function Call() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
@@ -48,6 +64,14 @@ export default function Call() {
   const [userInput, setUserInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [signalingStatus, setSignalingStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
+  const [diagnosticEvents, setDiagnosticEvents] = useState<DiagnosticEvent[]>([]);
+  const [streamingTranscripts, setStreamingTranscripts] = useState<StreamingTranscript[]>([]);
+  const [handoffInfo, setHandoffInfo] = useState<{ status: string; reason?: string; handoffId?: string } | null>(null);
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiResponding, setAiResponding] = useState(false);
+  const [aiCanHear, setAiCanHear] = useState(false);
   
   // Lead capture state
   const [showLeadCapture, setShowLeadCapture] = useState(false);
@@ -59,6 +83,34 @@ export default function Call() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptBufferRef = useRef<Array<{ speaker: "caller" | "ai_agent"; text: string }>>([]);
+  const micActivityRef = useRef<number>(0);
+
+  const MAX_DIAGNOSTIC_EVENTS = 25;
+  const MAX_STREAMING_TRANSCRIPTS = 50;
+
+  const logDiagnostic = useCallback((source: string, message: string, severity: "info" | "warning" | "error" = "info") => {
+    const event: DiagnosticEvent = {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      source,
+      message,
+      severity,
+    };
+
+    setDiagnosticEvents((prev) => [event, ...prev].slice(0, MAX_DIAGNOSTIC_EVENTS));
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const lastActivity = micActivityRef.current;
+      const now = Date.now();
+      setAiCanHear(now - lastActivity < 1500 && isConnected);
+    }, 250);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isConnected]);
 
   // Load campaign info
   useEffect(() => {
@@ -83,6 +135,7 @@ export default function Call() {
         }
 
         setCampaign(data);
+        logDiagnostic("Call", `Loaded campaign: ${data.name}`);
       } catch (error) {
         console.error("Error loading campaign:", error);
         toast({
@@ -90,13 +143,14 @@ export default function Call() {
           description: "Failed to load campaign. Please try again.",
           variant: "destructive",
         });
+        logDiagnostic("Call", "Failed to load campaign details", "error");
       } finally {
         setLoading(false);
       }
     }
 
     loadCampaign();
-  }, [campaignId, navigate, toast]);
+  }, [campaignId, navigate, toast, logDiagnostic]);
 
   // Timer effect
   useEffect(() => {
@@ -162,6 +216,10 @@ export default function Call() {
     try {
       setIsConnecting(true);
       setIsRinging(true);
+      logDiagnostic("Call", "Lead captured; starting call handshake");
+      setDiagnosticEvents([]);
+      setStreamingTranscripts([]);
+      setHandoffInfo(null);
 
       // Generate consent ticket ID
       const consentTicketId = crypto.randomUUID();
@@ -181,20 +239,24 @@ export default function Call() {
       setShowLeadCapture(false);
 
       console.log("[Call] Starting call with LiveKit (16kHz Opus)...");
+      logDiagnostic("Call", "Playing ringback tone for 3 seconds");
 
       // Play phone ring
-      await playPhoneRing();
+      await playPhoneRing(3000);
       setIsRinging(false);
+      logDiagnostic("Call", "Ringback finished; creating call session");
 
       // Create call session in database
       const session = await createCallSession(campaignId);
       setCallSession(session);
+      logDiagnostic("Call", `Call session created (${session.id})`);
 
       // Link lead to call
       await linkLeadToCall(lead.id, session.id);
 
       // Get LiveKit token
       console.log("[Call] Fetching LiveKit token...");
+      logDiagnostic("LiveKit", "Requesting token from Supabase function");
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
         body: {
           campaignId,
@@ -208,21 +270,35 @@ export default function Call() {
 
       const { token, url: livekitUrl, roomName } = tokenData;
       console.log("[Call] LiveKit token received, room:", roomName);
+      logDiagnostic("LiveKit", "Token received; connecting to room");
 
       // Initialize Voice Orchestrator with LiveKit (16kHz Opus)
       const orchestrator = new VoiceOrchestrator({
         onConnectionStatus: (status) => {
           console.log("[Call] Connection status:", status);
+          logDiagnostic("LiveKit", `Connection status: ${status}`);
           if (status === "connected") {
             setIsConnected(true);
             setIsConnecting(false);
+            setSignalingStatus((prev) => (prev === "disconnected" ? "connected" : prev));
           } else if (status === "disconnected") {
             setIsConnected(false);
+            setAiProcessing(false);
+            setAiResponding(false);
+            setMicLevel(0);
           }
         },
         onTranscript: (text, speaker, isFinal) => {
           console.log(`[Call] Transcript (${speaker}, final=${isFinal}):`, text);
-          
+          const transcriptEvent: StreamingTranscript = {
+            id: crypto.randomUUID(),
+            speaker,
+            text,
+            isFinal: Boolean(isFinal),
+            timestamp: new Date(),
+          };
+          setStreamingTranscripts((prev) => [...prev.slice(-MAX_STREAMING_TRANSCRIPTS + 1), transcriptEvent]);
+
           if (isFinal) {
             const message: Message = {
               id: crypto.randomUUID(),
@@ -231,12 +307,28 @@ export default function Call() {
               timestamp: new Date(),
             };
             setMessages((prev) => [...prev, message]);
+            logDiagnostic(
+              "Transcript",
+              `${speaker === "user" ? "Caller" : "AI"} final transcript: ${text.slice(0, 120)}${
+                text.length > 120 ? "…" : ""
+              }`,
+            );
 
             // Buffer transcript for persistence
             transcriptBufferRef.current.push({
               speaker: speaker === "user" ? "caller" : "ai_agent",
               text,
             });
+
+            if (speaker === "user") {
+              setAiProcessing(true);
+              setAiResponding(false);
+            } else {
+              setAiProcessing(false);
+              setAiResponding(false);
+            }
+          } else if (speaker === "assistant") {
+            setAiProcessing(false);
           }
         },
         onError: (error) => {
@@ -246,9 +338,35 @@ export default function Call() {
             description: error.message,
             variant: "destructive",
           });
+          logDiagnostic("Orchestrator", error.message, "error");
         },
         onSpeakingChange: (speaking) => {
           setIsSpeaking(speaking);
+          setAiResponding(speaking);
+          if (speaking) {
+            setAiProcessing(false);
+            logDiagnostic("AI", "Assistant is speaking");
+          } else {
+            logDiagnostic("AI", "Assistant finished speaking");
+          }
+        },
+        onLocalAudioLevel: (level) => {
+          setMicLevel(level);
+          if (level > 0.02) {
+            micActivityRef.current = Date.now();
+          }
+        },
+        onSignalingStatus: (status) => {
+          setSignalingStatus(status);
+          logDiagnostic("Signaling", `WebSocket ${status}`);
+        },
+        onHandoffUpdate: (handoff) => {
+          setHandoffInfo(handoff);
+          logDiagnostic(
+            "Handoff",
+            `Status: ${handoff.status}${handoff.reason ? ` – ${handoff.reason}` : ""}`,
+            handoff.status === "cancelled" ? "warning" : "info",
+          );
         },
       });
 
@@ -265,6 +383,7 @@ export default function Call() {
       );
 
       console.log("[Call] Call started successfully with LiveKit WebRTC");
+      logDiagnostic("Call", "LiveKit session established");
     } catch (error) {
       console.error("[Call] Error starting call:", error);
       toast({
@@ -274,6 +393,7 @@ export default function Call() {
       });
       setIsConnecting(false);
       setIsRinging(false);
+      logDiagnostic("Call", "Failed to start call", "error");
     }
   };
 
@@ -390,6 +510,12 @@ export default function Call() {
 
       setCallSession(session);
       setIsConnected(false);
+      setSignalingStatus("disconnected");
+      setAiProcessing(false);
+      setAiResponding(false);
+      setMicLevel(0);
+      setHandoffInfo(null);
+      logDiagnostic("Call", "Call ended and session updated");
     } catch (error) {
       console.error("Error ending call:", error);
       toast({
@@ -397,6 +523,7 @@ export default function Call() {
         description: "Failed to end call properly",
         variant: "destructive",
       });
+      logDiagnostic("Call", "Failed to end call", "error");
     }
   };
 
@@ -442,6 +569,8 @@ export default function Call() {
 
   const isCallActive = callSession && callSession.status === "in_progress";
   const isCallEnded = callSession && callSession.status === "completed";
+  const microphoneLevelPercent = Math.min(100, Math.round(micLevel * 100));
+  const signalingLabel = signalingStatus === "connected" ? "Healthy" : signalingStatus === "connecting" ? "Negotiating" : "Offline";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex flex-col">
@@ -521,6 +650,125 @@ export default function Call() {
             <div ref={messagesEndRef} />
           </CardContent>
         </Card>
+
+        {/* Diagnostics */}
+        <div className="grid gap-4 md:grid-cols-2 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Audio & AI Status</CardTitle>
+              <CardDescription>Live microphone level and assistant activity</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Microphone Level</span>
+                  <span className="font-mono text-xs">{microphoneLevelPercent}%</span>
+                </div>
+                <div className="mt-2 h-3 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${microphoneLevelPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>AI can hear you</span>
+                  <Badge variant={aiCanHear ? "default" : "outline"}>{aiCanHear ? "Yes" : "Waiting"}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>AI processing</span>
+                  <Badge variant={aiProcessing ? "secondary" : "outline"}>{aiProcessing ? "In progress" : "Idle"}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>AI responding</span>
+                  <Badge variant={aiResponding ? "secondary" : "outline"}>{aiResponding ? "Speaking" : "Silent"}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>LiveKit</span>
+                  <Badge variant={isConnected ? "default" : isConnecting ? "secondary" : "outline"}>
+                    {isConnected ? "Connected" : isConnecting ? "Connecting" : "Idle"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>WebSocket</span>
+                  <Badge variant={signalingStatus === "connected" ? "default" : signalingStatus === "connecting" ? "secondary" : "outline"}>
+                    {signalingLabel}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Connection Diagnostics</CardTitle>
+              <CardDescription>LiveKit / orchestrator handshake timeline</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 max-h-60 overflow-y-auto">
+              {diagnosticEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No diagnostic events yet.</p>
+              ) : (
+                diagnosticEvents.map((event) => (
+                  <div key={event.id} className="border rounded-md p-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{event.source}</span>
+                      <span>{event.timestamp.toLocaleTimeString()}</span>
+                    </div>
+                    <p className="text-sm mt-1">{event.message}</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Streaming Transcript Inspector */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Streaming Transcript Inspector</CardTitle>
+            <CardDescription>Raw transcript events with finality markers</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+            {streamingTranscripts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No transcript activity yet.</p>
+            ) : (
+              streamingTranscripts.map((item) => (
+                <div key={item.id} className="border rounded-md p-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{item.timestamp.toLocaleTimeString()}</span>
+                    <span>{item.isFinal ? "final" : "partial"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{item.speaker === "user" ? "Caller" : "AI"}</span>
+                    <span className="ml-2 text-muted-foreground text-xs truncate max-w-[60%]">{item.text}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Handoff */}
+        {handoffInfo && (
+          <Card className="mb-6 border-dashed">
+            <CardHeader>
+              <CardTitle className="text-lg">Human Handoff Requested</CardTitle>
+              <CardDescription>Escalation details from orchestrator</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{handoffInfo.status}</Badge>
+                {handoffInfo.handoffId && <span className="font-mono text-xs">ID: {handoffInfo.handoffId}</span>}
+              </div>
+              {handoffInfo.reason && <p className="text-muted-foreground">{handoffInfo.reason}</p>}
+              <p className="text-muted-foreground">
+                A human agent has been notified. Keep the caller engaged until a teammate joins the LiveKit room.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Text Input (for testing without voice) */}
         {isConnected && (
